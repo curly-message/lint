@@ -1,0 +1,48 @@
+name: Tests
+
+on:
+  push:
+    # Branches only: a release tag names a tree the publish workflow has just tested.
+    branches: ['**']
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  Tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        node-version: [22, 24]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Before the tests build anything: a fresh checkout carries no build
+      # output, so what each tarball holds is what packing produced. The
+      # listing is read whole before it is searched: a search that stops at
+      # its first hit leaves the lister writing into a closed pipe, and
+      # `pipefail` counts that as a failure.
+      - name: Pack
+        shell: bash
+        run: |
+          check() {
+            npm pack --workspace "$1" > /dev/null
+            packed=$(tar -tzf ./*.tgz)
+            shift
+            for file in "$@"; do grep -qx "package/$file" <<< "$packed"; done
+            rm ./*.tgz
+          }
+          check lint dist/index.js dist/index.d.ts dist/cli.js
+
+      - name: Test
+        run: npm test
