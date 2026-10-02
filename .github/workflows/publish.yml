@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - lint
+          - eslint-plugin
       release:
         description: 'next cuts a prerelease under the next dist-tag; patch, minor and major cut a release under latest'
         required: true
@@ -117,8 +118,11 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "section=$section" >> "$GITHUB_OUTPUT"
 
-      # Built once the version is bumped, so that publishing builds nothing.
-      - name: Build
+      # The plugin's types name the library's, which its build reads off the
+      # library's own build. Built once the version is bumped, as the plugin
+      # carries its version, so that publishing builds nothing.
+      - name: Build every workspace
+        working-directory: .
         run: npm run build
 
       # The release commit, its tag and the GitHub release are the app's: its

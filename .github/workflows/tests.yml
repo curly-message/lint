@@ -43,6 +43,7 @@ jobs:
             rm ./*.tgz
           }
           check lint dist/index.js dist/index.d.ts dist/cli.js
+          check eslint-plugin dist/index.js dist/index.d.ts
 
       - name: Test
         run: npm test

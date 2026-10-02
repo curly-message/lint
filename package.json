@@ -1,13 +1,14 @@
 {
   "name": "@curly-message/lint-workspace",
   "private": true,
-  "description": "Workspace root of the Curly Message Format linter: the library and the command line in lint/.",
+  "description": "Workspace root of the Curly Message Format linter: the library and CLI in lint/, the ESLint plugin in eslint-plugin/.",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "workspaces": [
-    "lint"
+    "lint",
+    "eslint-plugin"
   ],
   "scripts": {
     "build": "npm run build --workspaces",

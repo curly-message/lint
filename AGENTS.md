@@ -15,15 +15,19 @@ this repository; sections 1-14 are the working rules.
 
 ## The repository
 
-A linter for the [Curly Message Format](https://github.com/curly-message/spec):
+A linter for the [Curly Message Format](https://github.com/curly-message/spec),
+in two packages:
 
 - **`lint/`** — `@curly-message/lint`: the rules, a library over them and the
   `curly-lint` command.
+- **`eslint-plugin/`** — `@curly-message/eslint-plugin`: the rules a single
+  message decides, as ESLint rules. It depends on `@curly-message/lint`.
 
-Each package is an **npm workspace** of one root: one lockfile at the root, one
-install (`npm ci`), each workspace with its own build, tests, README,
-CHANGELOG, LICENSE and version line. Release tags are namespaced by workspace —
-`lint-v1.0.0` — and the publish workflow cuts them
+They are **npm workspaces** of one root, because the plugin depends on the
+library and both change together: one lockfile at the root, one install
+(`npm ci`), each workspace with its own build, tests, README, CHANGELOG,
+LICENSE and version line. Release tags are namespaced by workspace —
+`lint-v1.0.0`, `eslint-plugin-v1.0.0` — and the publish workflow cuts them
 (`.github/workflows/publish.yml`; the README's Releasing section says what it
 does).
 
@@ -106,8 +110,8 @@ differently.**
   `git commit --fixup=<sha>` + `git rebase -i --autosquash`, not an "address
   review" commit.
 - Commit messages: imperative mood, `type(scope): summary`. Scope the
-  workspace when the change is inside one (`feat(lint): …`); leave it off for
-  root-level changes.
+  workspace when the change is inside one (`feat(lint): …`,
+  `fix(eslint-plugin): …`); leave it off for root-level changes.
 
 ## 7. Branch & push discipline
 
@@ -129,9 +133,10 @@ differently.**
 ## 9. Docs track code
 
 Update docs in the same PR that invalidates them: this file, the root
-`README.md`, and each workspace's `README.md` and `CHANGELOG.md`.
-`lint/README.md` lists every rule, and a test holds it to `RULES`. A new rule
-is a row in `RULES` and a section in `lint/README.md`.
+`README.md`, and each workspace's `README.md` and `CHANGELOG.md`. Each
+workspace's README lists every rule, and a test holds it to `RULES`. A new
+rule is a row in `RULES`, a section in `lint/README.md`, and — where a single
+message decides it — a row in `eslint-plugin/README.md`.
 
 ## 10. Coding conventions
 
@@ -175,7 +180,8 @@ editors on every keystroke.
 
 - `lint/tests/` drives the rules through `lintMessage` and `lintCatalogue`,
   the reader through `readCatalogue`, and the command through `run` from
-  `src/run.ts`.
+  `src/run.ts`. `eslint-plugin/tests/` drives the plugin through ESLint's own
+  `Linter`.
 - A rule's test shows what it finds and what it leaves alone: the near miss
   is the test.
 - **Bug fixes are test-driven (red → green).** Confirm the test fails against
