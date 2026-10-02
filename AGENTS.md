@@ -26,13 +26,16 @@ one npm workspace per package:
 | Path | Package |
 |------|---------|
 | `lint/` | `@curly-message/lint`: the rules, a library over them and the `curly-lint` command |
+| `eslint-plugin/` | `@curly-message/eslint-plugin`: the rules a single message decides, as ESLint rules |
 
-- **One root, one install**: one lockfile at the root, one `npm ci`, each
+- **Workspaces of one root**, because the plugin depends on the library and
+  both change together: one lockfile at the root, one `npm ci`, each
   workspace with its own build, tests, README, CHANGELOG, LICENSE and version
   line. Run every command from the root.
-- **Release tags are namespaced by workspace** — `lint-v1.0.0` — and the
-  publish workflow cuts them (`.github/workflows/publish.yml`; the README's
-  Releasing section says what it does).
+- **Release tags are namespaced by workspace** — `lint-v1.0.0`,
+  `eslint-plugin-v1.0.0` — and the publish workflow cuts them
+  (`.github/workflows/publish.yml`; the README's Releasing section says what
+  it does).
 - **The lockfile is written with npm 11** (`npx npm@11 install`). npm 10 fails
   to resolve the workspaces' peer dependencies, though it installs from the
   lockfile (`npm ci`) as CI's Node 22 does.
@@ -43,13 +46,13 @@ Tech stack — **ground truth, do not assume otherwise**:
 
 | | |
 |---|---|
-| Package | `@curly-message/lint`, unreleased; its first version, `1.0.0-next.0`, is published by hand |
+| Packages | `@curly-message/lint` and `@curly-message/eslint-plugin`, unreleased; the first version of each, `1.0.0-next.0`, is published by hand |
 | Language | TypeScript, ESM only |
 | Package manager | npm 11, workspaces |
 | Build | tsup |
 | Tests | vitest |
 | Lint | ESLint flat config with `@stylistic`, run by a pre-commit hook |
-| Dependencies | `@curly-message/parser` as a peer, and as a `devDependency` to build and test against |
+| Dependencies | the library: `@curly-message/parser` as a peer, and as a `devDependency` to build and test against; the plugin: the library pinned exactly, the parser as a peer, ESLint 9+ as a peer |
 | Supported runtimes | Node 22+ |
 | CI | `tests.yml`, `publish.yml` |
 
@@ -70,6 +73,10 @@ Map of `lint/src/`:
 | `message.ts`, `catalogue.ts` | the rules |
 | `read.ts`, `locale.ts` | read files, and a locale and namespace off a path |
 | `run.ts` | the command; `cli.ts` only starts it |
+
+The plugin is `eslint-plugin/src/index.ts`: the rules a single message
+decides, with or without its locale. The rules that compare locales stay the
+command's, since ESLint hands a rule one file.
 
 ## The format decides, not the linter
 
@@ -109,8 +116,10 @@ editors on every keystroke.
 ## Docs and findings
 
 - The docs are the root `README.md` and each workspace's `README.md` and
-  `CHANGELOG.md`. `lint/README.md` lists every rule, and a test holds it to
-  `RULES`: a new rule is a row in `RULES` and a section in `lint/README.md`.
+  `CHANGELOG.md`. Each workspace's README lists every rule, and a test holds
+  it to `RULES`: a new rule is a row in `RULES`, a section in
+  `lint/README.md`, and — where a single message decides it — a row in
+  `eslint-plugin/README.md`.
 - A finding's message is English, says what is wrong and what happens instead,
   and quotes what it is about in backticks.
 
@@ -118,4 +127,5 @@ editors on every keystroke.
 
 - `lint/tests/` drives the rules through `lintMessage` and `lintCatalogue`,
   the reader through `readCatalogue`, and the command through `run` from
-  `src/run.ts`.
+  `src/run.ts`. `eslint-plugin/tests/` drives the plugin through ESLint's own
+  `Linter`.

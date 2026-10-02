@@ -42,6 +42,7 @@ export default tseslint.config(
     plugins: { 'import-x': importX },
   },
   manifests('lint'),
+  manifests('eslint-plugin'),
   {
     // The formatting contract this repository lints by, named in AGENTS.md.
     plugins: { '@stylistic': stylistic },
