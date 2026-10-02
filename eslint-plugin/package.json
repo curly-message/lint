@@ -1,0 +1,60 @@
+{
+  "name": "@curly-message/eslint-plugin",
+  "version": "1.0.0-next.0",
+  "description": "ESLint plugin for the Curly Message Format: lints messages in JavaScript, TypeScript and JSON.",
+  "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --max-warnings=0",
+    "pretest": "npm run build && npm run typecheck && npm run lint",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/curly-message/lint.git",
+    "directory": "eslint-plugin"
+  },
+  "keywords": [
+    "curly-message",
+    "eslint",
+    "eslintplugin",
+    "eslint-plugin",
+    "i18n",
+    "translations"
+  ],
+  "author": "Jarda Svoboda",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/curly-message/spec/issues"
+  },
+  "homepage": "https://curlymessage.dev/",
+  "dependencies": {
+    "@curly-message/lint": "1.0.0-next.0"
+  },
+  "peerDependencies": {
+    "@curly-message/parser": "^3.1.1",
+    "eslint": ">=9.0.0"
+  },
+  "devDependencies": {
+    "@curly-message/parser": "^3.1.1",
+    "@eslint/json": "^2.1.0"
+  }
+}
