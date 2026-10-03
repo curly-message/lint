@@ -1,0 +1,55 @@
+{
+  "name": "@curly-message/lint",
+  "version": "1.0.0-next.0",
+  "description": "Linter for the Curly Message Format: messages and catalogues, as a library and a CLI.",
+  "type": "module",
+  "sideEffects": false,
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "curly-lint": "./dist/cli.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsup --watch",
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint . --max-warnings=0",
+    "pretest": "npm run build && npm run typecheck && npm run lint",
+    "test": "vitest run",
+    "prepack": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/curly-message/lint.git",
+    "directory": "lint"
+  },
+  "keywords": [
+    "curly-message",
+    "lint",
+    "linter",
+    "i18n",
+    "translations",
+    "catalogue"
+  ],
+  "author": "Jarda Svoboda",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/curly-message/lint/issues"
+  },
+  "homepage": "https://curlymessage.dev/",
+  "dependencies": {
+    "@curly-message/parser": "^3.1.1"
+  }
+}
