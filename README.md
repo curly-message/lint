@@ -55,8 +55,8 @@ release carrying that changelog section.
 The plugin pins the library exactly, so the two release together: the library
 first, then a plugin version whose pin names it.
 
-The commit, the tag and the release are made as a GitHub App, whose id and
-private key the repository holds as the `APP_ID` variable and the
+The commit, the tag and the release are made as a GitHub App, whose client ID
+and private key the repository holds as the `APP_CLIENT_ID` variable and the
 `APP_PRIVATE_KEY` secret. Its token is minted once the build is done, and no
 dependency runs an install script in the job, so no dependency's code runs
 while the token exists. npm holds no token: the workflow is each package's

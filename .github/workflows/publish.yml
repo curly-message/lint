@@ -138,9 +138,9 @@ jobs:
       # minted once the build is done: no dependency runs while it exists.
       - name: Mint the release token
         id: app
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
-          app-id: ${{ vars.APP_ID }}
+          client-id: ${{ vars.APP_CLIENT_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       # The pre-commit hook lints the workspace; the tests job already did.
