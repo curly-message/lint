@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { localeOf, readCatalogue } from '@curly-message/lint';
+import { readCatalogue } from '@curly-message/lint';
 import type { Read } from '@curly-message/lint';
 
 const ok = (read: Read) => {
@@ -75,36 +75,5 @@ describe('readCatalogue', () => {
 
   it('skips a byte order mark', () => {
     expect(ok(readCatalogue('\ufeff{"a": "b"}')).strings[0].start).toBe(7);
-  });
-});
-
-describe('localeOf', () => {
-  it('reads the directory that holds the file where it names a locale, and the namespace after it', () => {
-    expect(localeOf('src/lib/translations/cs/common.json')).toEqual({ locale: 'cs', namespace: ['common'] });
-    expect(localeOf('locales/en.json')).toEqual({ locale: 'en', namespace: [] });
-    expect(localeOf('i18n/en_US/a/b.json')).toEqual({ locale: 'en-US', namespace: ['a', 'b'] });
-    expect(localeOf('C:\\app\\locales\\de\\shop.json')).toEqual({ locale: 'de', namespace: ['shop'] });
-  });
-
-  it('reads a file named like a locale under a locale\'s directory as a namespace', () => {
-    expect(localeOf('locales/en/sms.json')).toEqual({ locale: 'en', namespace: ['sms'] });
-  });
-
-  it('reads the file\'s own name before a directory farther up', () => {
-    expect(localeOf('tests/it/locales/en.json')).toEqual({ locale: 'en', namespace: [] });
-    expect(localeOf('src/my/translations/de.json')).toEqual({ locale: 'de', namespace: [] });
-    expect(localeOf('locales/cs/admin/users.json')).toEqual({ locale: 'cs', namespace: ['admin', 'users'] });
-  });
-
-  it('takes a two-letter language the host has no rules for, or rewrites', () => {
-    expect(localeOf('locales/mi.json')).toEqual({ locale: 'mi', namespace: [] });
-    expect(localeOf('locales/iw/common.json')).toEqual({ locale: 'iw', namespace: ['common'] });
-    expect(localeOf('locales/tl_PH.json')).toEqual({ locale: 'tl-PH', namespace: [] });
-  });
-
-  it('takes no segment that names no language, or a longer alias the host rewrites', () => {
-    expect(localeOf('src/app.json')).toEqual({ namespace: [] });
-    expect(localeOf('translations/common.json')).toEqual({ namespace: [] });
-    expect(localeOf('ui/db.json')).toEqual({ namespace: [] });
   });
 });

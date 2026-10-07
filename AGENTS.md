@@ -74,7 +74,7 @@ Map of `lint/src/`:
 | `rules.ts` | the table of rules, `RULES` |
 | `tree.ts` | reads a message off the parser's tree |
 | `message.ts`, `catalogue.ts` | the rules |
-| `read.ts`, `locale.ts` | read files, and a locale and namespace off a path |
+| `read.ts`, `locale.ts` | read files, and the locale and namespace a pattern places in a path |
 | `run.ts` | the command; `cli.ts` only starts it |
 
 The plugin is `eslint-plugin/src/index.ts`: the rules a single message

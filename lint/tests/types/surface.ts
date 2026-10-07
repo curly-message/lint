@@ -17,7 +17,6 @@ export type Surface = [
   Assert<Equal<typeof Shipped.lintCatalogue, typeof Source.lintCatalogue>>,
   Assert<Equal<typeof Shipped.lintEntries, typeof Source.lintEntries>>,
   Assert<Equal<typeof Shipped.lintMessage, typeof Source.lintMessage>>,
-  Assert<Equal<typeof Shipped.localeOf, typeof Source.localeOf>>,
   Assert<Equal<typeof Shipped.readCatalogue, typeof Source.readCatalogue>>,
   Assert<Equal<typeof Shipped.RULES, typeof Source.RULES>>,
   Assert<Equal<Shipped.Catalogue, Source.Catalogue>>,

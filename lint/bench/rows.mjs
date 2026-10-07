@@ -1,5 +1,9 @@
 // The rows `../bench/harness.mjs` measures, each on the build in `dist/`.
-import { readdirSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { lintCatalogue, lintMessage, readCatalogue } from '../dist/index.js';
 
@@ -49,10 +53,68 @@ const reads = () => {
   return count;
 };
 
+// What the command asks of the file system walking a tree of catalogues:
+// three locales of three namespaces of three files, a directory beside them
+// that is no locale, and the links a project makes, each of which a walk
+// could follow more often than it needs. A locale that is another's, a
+// namespace that is another's, a link to a directory above, a locale linked
+// in from elsewhere that links back to the directory searched, a chain of
+// directories each linked twice from the one before, which has 2^8 paths to
+// its end, and links to the chain from hidden names and node_modules, which
+// a walk need not follow.
+const walked = (...argv) => {
+  const root = mkdtempSync(join(tmpdir(), 'curly-lint-bench-'));
+  const file = (path) => {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), '{"hi": "Hi"}');
+  };
+  const link = (target, path) => symlinkSync(join(root, target), join(root, path), 'junction');
+
+  try {
+    for (const locale of ['en', 'cs', 'de']) {
+      for (const namespace of ['a', 'b', 'c']) for (const name of ['x', 'y', 'z']) file(`locales/${locale}/${namespace}/${name}.json`);
+      file(`locales/${locale}/.git/x.json`);
+    }
+
+    file('locales/tools/a/x.json');
+    link('locales/en', 'locales/pt');
+    link('locales/en/a', 'locales/en/d');
+    link('.', 'locales/cs/up');
+    file('vendor/fr/a/x.json');
+    link('vendor/fr', 'locales/fr');
+    link('locales', 'vendor/fr/back');
+    file('chain/8/x.json');
+    for (let step = 0; step < 8; step += 1) {
+      mkdirSync(join(root, `chain/${step}`), { recursive: true });
+      link(`chain/${step + 1}`, `chain/${step}/l`);
+      link(`chain/${step + 1}`, `chain/${step}/r`);
+    }
+
+    link('chain/0', 'locales/de/chain');
+    for (const locale of ['en', 'cs', 'de']) {
+      link('chain', `locales/${locale}/.cache`);
+      link('chain', `locales/${locale}/a/node_modules`);
+    }
+
+    // `--import` takes a URL, which a path on Windows is not.
+    const { status, stderr, output } = spawnSync(process.execPath, ['--import', new URL('count-fs.mjs', import.meta.url).href, fileURLToPath(new URL('../dist/cli.js', import.meta.url)), ...argv], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe', 'pipe'] });
+    const count = Number(output[3]);
+
+    if (status !== 0) throw new Error(`the command exited ${status}: ${stderr}`);
+    if (!(count > 0)) throw new Error('the command counted no call');
+
+    return count;
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+};
+
 export default [
   { name: 'dist/*.js', kind: 'size', run: () => bundle().length },
   { name: 'dist/*.js, gzipped', kind: 'size', run: () => gzipSync(bundle(), { level: 9 }).length },
   { name: 'catalogue reads: linting 1 000 messages in two locales', kind: 'count', run: reads },
+  { name: 'curly-lint: file system calls, a pattern over a tree with links', kind: 'count', run: () => walked('locales/{locale}/{namespace}.json') },
+  { name: 'curly-lint: file system calls, a directory given as it is, over the same tree', kind: 'count', run: () => walked('.') },
   { name: 'lintMessage: five catalogue messages, with their locale', kind: 'time', run: () => () => {
     for (const [, message] of MESSAGES) lintMessage(message, { locale: 'cs' });
   } },

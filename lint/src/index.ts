@@ -1,7 +1,6 @@
 export { lintMessage } from './message';
 export { entriesOf, flatten, lintCatalogue, lintEntries } from './catalogue';
 export type { Entry } from './catalogue';
-export { localeOf } from './locale';
 export { readCatalogue } from './read';
 export { RULES } from './rules';
 export type { Rule, Scope } from './rules';

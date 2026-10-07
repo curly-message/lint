@@ -23,21 +23,56 @@ the project resolves it with, so the two agree on what a placeholder is.
 ## The command line
 
 ```bash
-npx curly-lint locales
+npx curly-lint "locales/{locale}/{namespace}.json"
 ```
 
-`curly-lint` lints the JSON catalogues it is given, searching a directory for
-`.json` files. A file's locale is the directory that holds it where that names
-one, else the file's own name, else the nearest directory farther up that
-names one, and what follows the locale is the namespace its ids sit under:
-`locales/cs/common.json` holds Czech messages whose ids start with `common.`,
-`locales/cs.json` holds them under no namespace, `locales/en/sms.json` holds
-English messages under `sms`, and `locales/cs/admin/users.json` holds Czech
-ones under `admin.users`. A directory farther up is read last, as a project
-names its own directories like locales often enough — `it` for integration
-tests — and `tests/it/locales/en.json` holds English messages. A locale may be
-written with `_`, as in `pt_BR`. A file whose path names no locale is linted
-message by message.
+`curly-lint` lints the JSON catalogues a pattern names, and reads each file's
+locale and namespace off its path where the pattern places them:
+`locales/cs/common.json` holds Czech messages whose ids sit under `common`, and
+`locales/cs/admin/users.json` holds Czech ones under `admin.users`. All a run
+reads is one catalogue, each id compared across the locales found in it, so
+lint another app's catalogue in a run of its own.
+
+- `{locale}` stands for a locale tag within one name of the path, with text
+  around it where the pattern writes some, as in
+  `"i18n/messages.{locale}.json"`. A tag is one whose language has two or three
+  letters, such as `cs`, `en-US` or `pt_BR`, read as `pt-BR`. A file whose path
+  holds no tag there, such as `locales/glossary.json`, is not one the pattern
+  names.
+- `{namespace}` stands for one name or more, joined with dots:
+  `"locales/{namespace}/{locale}.json"` reads `locales/admin/users/cs.json` as
+  Czech messages under `admin.users`. Where a pattern has none, a file's ids sit
+  under no namespace.
+- Each is there once at most, and both share a name only where the pattern
+  parts them with a character no tag holds, such as `.`:
+  `"i18n/{namespace}.{locale}.json"`.
+- The pattern names `.json` files, and the directory before its first
+  placeholder is searched for them. `/` and `\` both part names.
+- No placeholder reads a name that starts with a dot, nor `node_modules`: the
+  pattern reads one only where it writes that dot or that name, as in
+  `"packages/{namespace}/.i18n/{locale}.json"`.
+- Links are followed, but not one to a directory that holds it, nor one to
+  the directory searched or a directory above it.
+- A file is read once for each locale it has, at one of its paths, its ids
+  under the namespace that path places: the first pattern's path to it, of
+  those the one through the fewest links, and of those the first in the order
+  of paths. A link `locales/pt` to `locales/pt-BR` reads a file as `pt` and as
+  `pt-BR`; a link `locales/en/app.json` to `common.json` beside it reads that
+  file under `common` alone.
+
+Quote a pattern, as PowerShell and some shells read its braces otherwise. In a
+`package.json` script, escape the quotes:
+`"lint:messages": "curly-lint \"locales/{locale}/{namespace}.json\""`.
+
+A file or a directory given as it is, searched for `.json` files, holds no
+locale and no namespace: its messages are linted one by one, compared with no
+other locale's, and the command says how many files it read without a locale.
+Below such a directory, no name that starts with a dot and no `node_modules` is
+read, and links are followed as below a pattern's. A file a pattern reads is
+read as the pattern places it, whichever argument comes first.
+`--locale` names the locale of every file whose path holds none, so
+`curly-lint "locales/en/{namespace}.json" --locale en` lints the English
+catalogue alone, under its namespaces.
 
 ```
 locales/cs/common.json:2:9  error  This message never reads `name`, which the `en` message reads.  parameter-mismatch
@@ -48,8 +83,8 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 
 | Option | Meaning |
 | --- | --- |
-| `--locale <tag>` | The locale of every file given, instead of its path's. |
-| `--source <tag>` | The locale the others are compared with: `en` where the catalogue holds it, and otherwise the first locale found. |
+| `--locale <tag>` | The locale of every file whose path holds none. |
+| `--source <tag>` | The locale the others are compared with: `en` where the catalogue holds it, and otherwise the first locale found, reading the arguments in their order and the files of each in the order of their paths. |
 | `--modifier <name>` | A modifier the host registers. Repeat it for each. |
 | `--no-intl` | The host satisfies Core alone, not Intl: the six modifiers Intl defines are unknown unless `--modifier` names them. |
 | `--format <format>` | `text`, the default, or `json`. |
@@ -58,7 +93,7 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 A file that is not JSON is an [`unreadable-catalogue`](#unreadable-catalogue)
 error at the place its reading stops, and so is one nested deeper than 512
 levels. The command exits 1 where it finds an error, 2 where its arguments are
-wrong or a path cannot be read, and 0 otherwise.
+wrong, a path cannot be read or a pattern names no file, and 0 otherwise.
 
 ## The library
 
@@ -83,7 +118,6 @@ lintCatalogue({
 | `lintEntries(entries, options?)` | The same over a list of `{ locale, id, message }`. A finding's `entry` is the index of its message in the list. `options.locales` names the locales the catalogue is written for, so one with no message yet lacks every message of the source locale. |
 | `entriesOf(catalogue)`, `flatten(tree)` | The messages a catalogue or a tree holds, in order, each string leaf by its path joined with dots, up to a million for each tree. Only an object's own enumerable data members are read, so no accessor runs, and an object a tree holds inside itself is read where it is first reached. |
 | `readCatalogue(text)` | Reads a JSON catalogue as `JSON.parse` does, past a byte order mark and up to 512 levels deep, and says where each string stands in the text, past its escape sequences, and which members a later one of the same name replaced. |
-| `localeOf(path)` | The locale a path names and the namespace that follows it, as the command reads them. |
 | `RULES` | Every rule: its code, severity, scope and the section of the specification it rests on. |
 
 A finding carries its `code`, its `severity`, an English `message` saying
