@@ -24,7 +24,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint . --max-warnings=0",
     "pretest": "npm run build && npm run typecheck && npm run lint",
-    "test": "vitest run",
+    "test": "vitest run && vitest run --mode dist",
     "prepack": "npm run build"
   },
   "files": [

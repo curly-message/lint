@@ -13,7 +13,10 @@
     "moduleResolution": "bundler",
     "noEmit": true,
     "resolveJsonModule": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "paths": {
+      "@curly-message/lint": ["./src/index.ts"]
+    }
   },
   "include": [
     "./src",

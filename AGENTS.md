@@ -61,7 +61,7 @@ Commands, run from the root:
 | Command | What it does |
 |---------|--------------|
 | `npm ci` | install from the lockfile |
-| `npm test` | build, typecheck, lint, then the suite, for every workspace — what CI runs |
+| `npm test` | build, typecheck, lint, then the suite against the source and against the build, for every workspace — what CI runs |
 | `npm run lint:fix` | fix what the formatting contract reports |
 
 Map of `lint/src/`:
@@ -127,5 +127,9 @@ editors on every keystroke.
 
 - `lint/tests/` drives the rules through `lintMessage` and `lintCatalogue`,
   the reader through `readCatalogue`, and the command through `run` from
-  `src/run.ts`. `eslint-plugin/tests/` drives the plugin through ESLint's own
-  `Linter`.
+  `src/run.ts`, then once through the built `dist/cli.js`, as a project runs
+  it. `eslint-plugin/tests/` drives the plugin through ESLint's own `Linter`.
+- Each suite imports its package by name and runs twice: against the source,
+  and under `--mode dist` against the build a release ships. An import of the
+  package by a path into `src/` tests the source twice; the command's `run`,
+  which the package does not export, is the one module imported by path.
