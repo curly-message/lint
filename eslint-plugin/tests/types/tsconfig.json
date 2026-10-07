@@ -1,8 +1,6 @@
 {
   // The shipped declarations compiled as a consumer compiles them: reached
   // through the package's own `exports`, with every declaration file checked.
-  // Node's types load because the source they are compared with reads a path
-  // through `node:path`.
   "compilerOptions": {
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -12,7 +10,7 @@
     "noEmit": true,
     "skipLibCheck": false,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "types": []
   },
   "files": ["./surface.ts"]
 }

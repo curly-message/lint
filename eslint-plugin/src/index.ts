@@ -1,5 +1,4 @@
-import { relative } from 'node:path';
-import { lintMessage, localeOf, readCatalogue, RULES } from '@curly-message/lint';
+import { lintMessage, readCatalogue, RULES } from '@curly-message/lint';
 import type { Code, Finding } from '@curly-message/lint';
 import type { ESLint, Linter, Rule } from 'eslint';
 import { version } from '../package.json';
@@ -18,8 +17,8 @@ export type Settings = {
    */
   catalogue?: boolean,
   /**
-   * The locale of every message in the file. Where none is named, a
-   * catalogue's path names the locale of the strings the catalogue holds.
+   * The locale of every message in the file. A path names none, so where
+   * this does not, a message is linted without one.
    */
   locale?: string,
   /** The modifiers the host registers. */
@@ -36,8 +35,7 @@ type Node = { type: string, range?: [number, number], [key: string]: unknown };
 
 type SourceCode = Rule.RuleContext['sourceCode'];
 
-/** A message, and whether a catalogue holds it rather than a call. */
-type Message = { node: Node, text: string, start: number, end: number, held: boolean };
+type Message = { node: Node, text: string, start: number, end: number };
 
 type Report = { code: Code, message: string, start: number, end: number };
 
@@ -120,26 +118,26 @@ const messagesOf = (sourceCode: SourceCode, settings: Settings): Message[] => {
   const root = sourceCode.ast as unknown as Node;
   const json = root.type === 'Document';
 
-  const add = (node: unknown, held: boolean) => {
+  const add = (node: unknown) => {
     const text = stringOf(node);
 
     if (text === undefined) return;
 
     const [start, end] = rangeOf(sourceCode, node as Node);
 
-    messages.push({ node: node as Node, text, start, end, held });
+    messages.push({ node: node as Node, text, start, end });
   };
 
   const walk = (node: Node) => {
-    if (json && node.type === 'Document') add(node.body, true);
-    if (json && (node.type === 'Member' || node.type === 'Element')) add(node.value, true);
-    if (!json && settings.catalogue && node.type === 'Property') add(node.value, true);
-    if (!json && settings.catalogue && node.type === 'ArrayExpression') for (const element of node.elements as unknown[]) add(element, true);
+    if (json && node.type === 'Document') add(node.body);
+    if (json && (node.type === 'Member' || node.type === 'Element')) add(node.value);
+    if (!json && settings.catalogue && node.type === 'Property') add(node.value);
+    if (!json && settings.catalogue && node.type === 'ArrayExpression') for (const element of node.elements as unknown[]) add(element);
 
     if (!json && node.type === 'CallExpression') {
       const name = nameOf(node.callee as Node);
 
-      if (name && callees.includes(name)) add((node.arguments as Node[])[0], false);
+      if (name && callees.includes(name)) add((node.arguments as Node[])[0]);
     }
 
     for (const child of children(sourceCode, node)) walk(child);
@@ -157,7 +155,7 @@ const linted = new WeakMap<object, Map<string, Report[]>>();
 const reportsOf = (context: Rule.RuleContext): Report[] => {
   const { sourceCode } = context;
   const settings = settingsOf(context);
-  const cacheKey = JSON.stringify([context.cwd, context.filename, settings]);
+  const cacheKey = JSON.stringify(settings);
   const byFile = linted.get(sourceCode) ?? new Map<string, Report[]>();
 
   linted.set(sourceCode, byFile);
@@ -166,18 +164,12 @@ const reportsOf = (context: Rule.RuleContext): Report[] => {
 
   if (cached) return cached;
 
-  // Read from the working directory, as a directory above a project names
-  // nothing about it.
-  const named = localeOf(relative(context.cwd, context.filename)).locale;
   const reports: Report[] = [];
 
-  for (const { node, text, start, end, held } of messagesOf(sourceCode, settings)) {
+  for (const { node, text, start, end } of messagesOf(sourceCode, settings)) {
     const at = locator(sourceCode, node, text);
-    // A path names the locale of what the catalogue holds: a call's message
-    // may be resolved for any locale.
-    const locale = settings.locale ?? (held ? named : undefined);
 
-    for (const found of lintMessage(text, { locale, modifiers: settings.modifiers, intl: settings.intl })) {
+    for (const found of lintMessage(text, { locale: settings.locale, modifiers: settings.modifiers, intl: settings.intl })) {
       reports.push({ code: found.code, message: found.message, ...span(found, at, start, end) });
     }
   }

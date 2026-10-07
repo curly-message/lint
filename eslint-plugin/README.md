@@ -37,21 +37,23 @@ export default [
   // Messages passed to `resolve` in source code.
   { files: ['src/**/*.{js,ts}'], ...curly.configs.recommended },
 
-  // A catalogue written as a module: every string a property or an array
-  // holds.
-  {
-    files: ['src/lib/translations/**/*.{js,ts}'],
+  // Each locale's catalogue written as a module: every string a property or
+  // an array holds, read with the rules its locale decides.
+  ...['en', 'cs'].map((locale) => ({
+    files: [`src/lib/translations/${locale}/**/*.{js,ts}`],
     ...curly.configs.recommended,
-    settings: { 'curly-message': { catalogue: true } },
-  },
+    settings: { 'curly-message': { catalogue: true, locale } },
+  })),
 
-  // A JSON catalogue: every string a member or an element holds.
-  {
-    files: ['src/lib/translations/**/*.json'],
+  // Each locale's JSON catalogue: every string a member or an element holds,
+  // read with the rules its locale decides.
+  ...['en', 'cs'].map((locale) => ({
+    files: [`src/lib/translations/${locale}/**/*.json`],
     language: 'json/json',
     plugins: { json, ...curly.configs.recommended.plugins },
     rules: curly.configs.recommended.rules,
-  },
+    settings: { 'curly-message': { locale } },
+  })),
 ];
 ```
 
@@ -65,7 +67,7 @@ Under `settings['curly-message']`:
 | --- | --- |
 | `callees` | The functions whose first argument is a message, by name or by the property a method is called through. `['resolve']` where none is named. |
 | `catalogue` | Whether every string a property of an object literal or an array holds is a message. JSON is always read this way. |
-| `locale` | The locale of every message in the file, written with `-` or `_`. Where none is named, a catalogue's path names the locale of the strings the catalogue holds, as `curly-lint` reads it from the working directory — `translations/cs/common.json` holds `cs` — and a message passed to a call has none, since it may be resolved for any. |
+| `locale` | The locale of every message in the file, written with `-` or `_`. A path names none, so each locale's catalogues take theirs from a block of the config of their own, as above. A message passed to a call may be resolved for any locale, and is linted without one where its file's block names none. |
 | `modifiers` | The names of the modifiers the host registers. |
 | `intl` | Whether the host satisfies the Intl level. `false` is a host that satisfies Core alone, which does not have `number`, `date`, `ago`, `currency`, `plural` or `ordinal` unless it registers them. |
 
@@ -96,7 +98,7 @@ says what each finds.
 | `@curly-message/keyed-category` | warn |
 
 `unused-category`, `missing-category` and `keyed-category` need a locale, and
-report nothing where the settings and the path name none.
+report nothing where the settings name none.
 
 ## License
 

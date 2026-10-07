@@ -17,7 +17,7 @@ const MESSAGES = [
 
 const CONFIG = [
   { files: ['**/*.js'], ...plugin.configs.recommended },
-  { files: ['**/*.json'], language: 'json/json', plugins: { json, '@curly-message': plugin }, rules: plugin.configs.recommended.rules },
+  { files: ['**/*.json'], language: 'json/json', plugins: { json, '@curly-message': plugin }, rules: plugin.configs.recommended.rules, settings: { 'curly-message': { locale: 'en' } } },
 ];
 
 const linting = (text, filename) => {

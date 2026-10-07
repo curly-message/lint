@@ -11,8 +11,8 @@ The first version: ESLint rules for messages of the Curly Message Format.
   calls named in `callees`; every string a property or an array holds in a
   catalogue written as a module; every string a JSON document holds, through
   `@eslint/json`.
-* **The locale** is the one the settings name, or, for the strings a
-  catalogue holds, the one its path names.
+* **The locale** is the one the settings name, which a config gives each
+  locale's catalogues in a block of their own: a path names none.
 * **Findings point at their characters**, past the escape sequences of a JSON
   string, and at the whole string where JavaScript reads one otherwise than
   its source spells it.
