@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entriesOf, flatten, lintCatalogue, lintEntries } from '../src';
+import { entriesOf, flatten, lintCatalogue, lintEntries } from '@curly-message/lint';
 import { DEEP, overflowing } from './overflow';
 
 const codes = (found: ReturnType<typeof lintCatalogue>) => found.map(({ code, locale, id }) => `${code} ${locale} ${id}`);

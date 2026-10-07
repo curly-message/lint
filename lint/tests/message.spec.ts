@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { lintMessage, RULES } from '../src';
-import type { MessageOptions } from '../src';
+import { lintMessage, RULES } from '@curly-message/lint';
+import type { MessageOptions } from '@curly-message/lint';
 import { DEEP, overflowing } from './overflow';
 
 // The code, the text it points at, and nothing else, so a case reads as the
