@@ -25,6 +25,16 @@ single message decides, since ESLint hands a rule one file at a time.
 Issues are filed in the family's shared tracker,
 [`curly-message/spec`](https://github.com/curly-message/spec/issues).
 
+## Benchmarks
+
+`npm run bench --workspace <path>` measures what a workspace's build costs:
+counts, such as what linting a catalogue reads of it, sizes, and times. A PR
+that touches a workspace is benchmarked against its base by `bench.yml`,
+which posts a table per workspace on the PR (a PR from a fork finds it in the
+job's summary). A count that grew, a row gone missing or changing kind, or a
+row that fails on the base fails the check unless the PR carries the
+`bench-accepted` label; adding or removing the label runs it again.
+
 ## Releasing
 
 A release is cut from `main` by the **Publish** workflow
@@ -37,7 +47,8 @@ dist-tag, and the run is refused unless the bump arrives at the version the
 section names. `next` publishes a prerelease of that same version —
 `1.1.0-next.0`, then `.1` — under the `next` dist-tag and leaves the section
 open. The workflow runs the test matrix, bumps the version, cuts the section
-where the release closes it, builds, commits, tags (`lint-v1.1.0`,
+where the release closes it, builds, writes the benchmark of the build into
+the workspace's `BENCH.md`, commits, tags (`lint-v1.1.0`,
 `eslint-plugin-v1.1.0`), pushes, publishes to npm, and publishes a GitHub
 release carrying that changelog section.
 
