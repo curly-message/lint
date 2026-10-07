@@ -6,7 +6,8 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 // A package may import what its own manifest declares and nothing else, and
-// a test or a config may also import the tooling the workspace root holds.
+// a test, a config or a benchmark may also import the tooling the workspace
+// root holds.
 const manifests = (directory) => ({
   files: [`${directory}/**`],
   rules: {
@@ -14,7 +15,7 @@ const manifests = (directory) => ({
       packageDir: [import.meta.dirname, join(import.meta.dirname, directory)],
       // Absolute, since the rule reads a glob against the directory ESLint
       // runs in, and a package's own scripts run it from the package.
-      devDependencies: ['*.config.ts', '*.config.js', 'tests/**'].map((glob) => join(import.meta.dirname, directory, glob)),
+      devDependencies: ['*.config.ts', '*.config.js', 'tests/**', 'bench/**'].map((glob) => join(import.meta.dirname, directory, glob)),
     }],
   },
 });
