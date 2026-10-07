@@ -54,7 +54,7 @@ Tech stack — **ground truth, do not assume otherwise**:
 | Lint | ESLint flat config with `@stylistic`, run by a pre-commit hook |
 | Dependencies | the library: `@curly-message/parser` as a peer, and as a `devDependency` to build and test against; the plugin: the library pinned exactly, the parser as a peer, ESLint 9+ as a peer |
 | Supported runtimes | Node 22+, Bun, Deno 2 |
-| CI | `tests.yml`, `publish.yml` |
+| CI | `tests.yml`, `bench.yml` and `bench-label.yml`, `publish.yml` |
 
 Commands, run from the root:
 
@@ -63,6 +63,8 @@ Commands, run from the root:
 | `npm ci` | install from the lockfile |
 | `npm test` | build, typecheck the source and the shipped declarations, lint, then the suite against the source and against the build, for every workspace — what CI runs |
 | `npm run test:bun`, `npm run test:deno` | build, then the suite on Bun or Deno, for every workspace — what the runtime legs of CI run |
+| `npm run bench --workspace <path>` | build, then the workspace's benchmark (`<path>/bench/rows.mjs`) |
+| `npm run bench --workspace <path> -- --compare <dir>` | the same, beside the workspace checked out and built at `<dir>` — what `bench.yml` runs on a PR |
 | `npm run lint:fix` | fix what the formatting contract reports |
 
 Map of `lint/src/`:
@@ -78,6 +80,10 @@ Map of `lint/src/`:
 The plugin is `eslint-plugin/src/index.ts`: the rules a single message
 decides, with or without its locale. The rules that compare locales stay the
 command's, since ESLint hands a rule one file.
+
+Each workspace's `bench/rows.mjs` lists the rows of its benchmark, each read
+off the build. `bench/harness.mjs` at the root measures them for both, and is
+the same file in every repository of the family.
 
 ## The format decides, not the linter
 
