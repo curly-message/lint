@@ -19,10 +19,12 @@ Format, as a library and as the `curly-lint` command.
   reading other parameters or showing one with another modifier than the
   source locale's, and a number key the source locale's selection has and
   another's lacks.
-* **`curly-lint`** reads JSON catalogues, takes each file's locale and
-  namespace from its path, and points each finding at its line and column,
-  past the escape sequences JSON spells a string with. A file that is not
-  JSON is an `unreadable-catalogue` error, and nothing under its namespace is
-  compared.
+* **`curly-lint`** reads the JSON catalogues a pattern such as
+  `"locales/{locale}/{namespace}.json"` names, takes each file's locale and
+  namespace where the pattern places them, and guesses neither: it says how
+  many files it read without a locale. It points each finding at its line and
+  column, past the escape sequences JSON spells a string with. A file that is
+  not JSON is an `unreadable-catalogue` error, and nothing under its namespace
+  is compared.
 * **The library** exports `lintMessage`, `lintCatalogue`, `lintEntries`,
-  `readCatalogue`, `localeOf` and the `RULES` table.
+  `readCatalogue` and the `RULES` table.

@@ -3,22 +3,23 @@ import { join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { lintEntries } from './catalogue';
 import type { Entry } from './catalogue';
-import { localeOf } from './locale';
+import { hidden, readPattern, tagOf } from './locale';
+import type { Pattern, Placed, Reader, Reading } from './locale';
 import { lintMessage } from './message';
 import { readCatalogue } from './read';
 import type { Located } from './read';
 import type { Finding, Severity } from './types';
 
-export const USAGE = `Usage: curly-lint [options] <file or directory>...
+export const USAGE = `Usage: curly-lint [options] <pattern, file or directory>...
 
-Lints the Curly Message Format messages in JSON catalogues. A directory is
-searched for .json files. Each file's locale is read off its path: the
-directory that holds the file, else the file's own name, else the nearest
-directory farther up, whichever first names one. locales/cs/common.json
-holds cs messages under the namespace common.
+Lints the Curly Message Format messages in JSON catalogues. A pattern names
+them, and where their paths hold each file's locale and namespace: in
+"locales/{locale}/{namespace}.json", locales/cs/admin/users.json holds cs
+messages whose ids sit under admin.users. A file or a directory searched for
+.json files names neither. Quote a pattern, as a shell may read its braces.
 
 Options:
-  --locale <tag>      The locale of every file given, instead of its path's.
+  --locale <tag>      The locale of every file whose path holds none.
   --source <tag>      The locale the others are compared with (default: en,
                       or the first locale found).
   --modifier <name>   A modifier the host registers. Repeat for each.
@@ -30,7 +31,8 @@ Options:
   --help              Print this and exit.
 
 Exits 1 where an error is found, a file that is not JSON included, 2 where
-the arguments are wrong or a path cannot be read, and 0 otherwise.`;
+the arguments are wrong, a path cannot be read or a pattern names no file,
+and 0 otherwise.`;
 
 export type Io = {
   cwd: string,
@@ -52,30 +54,84 @@ export type Problem = {
   id?: string,
 };
 
-const SKIPPED = new Set(['node_modules']);
+// What a path given as it is names below it: every .json file, placed nowhere.
+const PLAIN: Reader = {
+  start: { at: 0, span: [], placed: { namespace: [] } },
+  enter: (reading, name) => (hidden(name) ? [] : [reading]),
+  place: (reading, name) => (name.endsWith('.json') && !hidden(name) ? reading.placed : undefined),
+  key: () => '',
+};
+
+// By code units, which neither the runtime nor its locale orders otherwise.
+const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 const isDirectory = (path: string) => stat(path).then((found) => found.isDirectory(), () => false);
 
-// The files a path names: itself, or the .json files a directory holds,
-// through links, each directory once however many paths reach it.
-const catalogues = async (path: string, seen: Set<string>): Promise<string[]> => {
-  if (!(await stat(path)).isDirectory()) return [path];
+// Whether a directory is another or holds it, both where they stand.
+const holds = (outer: string, inner: string) => inner === outer || inner.startsWith(outer.endsWith(sep) ? outer : `${outer}${sep}`);
+
+type Found = { path: string, real: string, placed: Placed, links: number };
+
+// The files a path names, each with where it stands, what it is read as and
+// the links followed to reach it: a file given as it is, or the .json files
+// below a directory. A directory is read once for each reading the reader
+// keys apart, at the path with the fewest links, so a link only adds to what
+// the paths without one read. A link is not followed to a directory that
+// holds it, nor to the directory searched or one holding it. Each path reads
+// its base afresh, as which links it follows turns on the base.
+const catalogues = async (path: string, pattern: Pattern | undefined): Promise<Found[]> => {
+  // A file given as it is need stand nowhere, as a pipe does not.
+  if (!(await stat(path)).isDirectory()) return pattern ? [] : [{ path, real: await realpath(path).catch(() => path), placed: PLAIN.start.placed, links: 0 }];
 
   const real = await realpath(path);
+  const reader = pattern ?? PLAIN;
+  const seen = new Set<string>();
+  const files: Found[] = [];
+  const linked: [string, string, Reading[], number][] = [];
 
-  if (seen.has(real)) return [];
-  seen.add(real);
+  const read = async (directory: string, at: string, readings: Reading[], links: number) => {
+    const fresh: Reading[] = [];
 
-  const files: string[] = [];
+    for (const reading of readings) {
+      const key = `${reader.key(reading)}\0${at}`;
 
-  for (const entry of (await readdir(path, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name))) {
-    if (entry.name.startsWith('.') || SKIPPED.has(entry.name)) continue;
+      if (!seen.has(key)) fresh.push(reading);
+      seen.add(key);
+    }
 
-    const child = join(path, entry.name);
-    const linked = entry.isSymbolicLink();
+    if (!fresh.length) return;
 
-    if (entry.isDirectory() || (linked && await isDirectory(child))) files.push(...await catalogues(child, seen));
-    else if ((entry.isFile() || linked) && entry.name.endsWith('.json')) files.push(child);
+    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => byCode(a.name, b.name))) {
+      const { name } = entry;
+      const link = entry.isSymbolicLink();
+      // What the readings take the entry for, asked before a link is
+      // followed to learn which it is, as most entries are read as neither.
+      const next = entry.isDirectory() || link ? fresh.flatMap((reading) => reader.enter(reading, name)) : [];
+      const placings = entry.isFile() || link ? fresh.map((reading) => reader.place(reading, name)) : [];
+
+      if (!next.length && !placings.some(Boolean)) continue;
+
+      const child = join(directory, name);
+
+      if (entry.isDirectory() || (link && await isDirectory(child))) {
+        if (!next.length) continue;
+        if (link) linked.push([child, at, next, links + 1]);
+        else await read(child, join(at, name), next, links);
+      } else if (placings.some(Boolean)) {
+        const target = link ? await realpath(child).catch(() => join(at, name)) : join(at, name);
+
+        for (const placed of placings) if (placed) files.push({ path: child, real: target, placed, links: link ? links + 1 : links });
+      }
+    }
+  };
+
+  await read(path, real, [reader.start], 0);
+
+  for (let index = 0; index < linked.length; index += 1) {
+    const [child, holder, readings, links] = linked[index];
+    const target = await realpath(child);
+
+    if (!holds(target, holder) && !holds(target, real)) await read(child, target, readings, links);
   }
 
   return files;
@@ -105,22 +161,6 @@ const position = (text: string) => {
 
     return { line: low + 1, column: offset - starts[low] + 1 };
   };
-};
-
-// A locale as a tag, written with `-` as a path may write it with `_`, or
-// `null` where it is no tag.
-const tagOf = (locale: string | undefined) => {
-  if (locale === undefined) return undefined;
-
-  const tag = locale.replace(/_/g, '-');
-
-  try {
-    Intl.getCanonicalLocales(tag);
-
-    return tag;
-  } catch {
-    return null;
-  }
 };
 
 type Source = { file: string, located: Located, at: (offset: number) => { line: number, column: number } };
@@ -181,15 +221,30 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
     return 2;
   }
 
-  const given = tagOf(values.locale);
-  const source = tagOf(values.source);
+  for (const [option, value] of [['--locale', values.locale], ['--source', values.source]]) {
+    if (value !== undefined && !tagOf(value)) {
+      io.err(`${option} ${JSON.stringify(value)} is no locale: expected a tag such as cs or en-US.\n`);
 
-  if (given === null || source === null) {
-    const [option, value] = given === null ? ['--locale', values.locale] : ['--source', values.source];
+      return 2;
+    }
+  }
 
-    io.err(`${option} ${JSON.stringify(value)} is no locale: expected a tag such as cs or en-US.\n`);
+  const given = values.locale === undefined ? undefined : tagOf(values.locale);
+  const source = values.source === undefined ? undefined : tagOf(values.source);
+  const patterns = new Map<string, Pattern>();
 
-    return 2;
+  for (const argument of positionals) {
+    if (!/[{}]/.test(argument)) continue;
+
+    const pattern = readPattern(argument);
+
+    if (!pattern.ok) {
+      io.err(`The pattern ${argument} ${pattern.message}\n`);
+
+      return 2;
+    }
+
+    patterns.set(argument, pattern);
   }
 
   const modifiers = values.modifier ?? [];
@@ -214,19 +269,57 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
   const unknown = new Set<string>();
   let unreadable = false;
 
-  const files = new Set<string>();
-  const seen = new Set<string>();
+  // The files to read, in the order of the arguments and of the paths each
+  // reaches, with where each stands and what a pattern places in it, which a
+  // path given as it is does not.
+  const files: { path: string, real: string, placed?: Placed }[] = [];
+  // Each file a pattern reads by where it stands and the locale it is read
+  // in, and each a path given as it is reads by where it stands.
+  const placedAt = new Set<string>();
+  const plainAt = new Set<string>();
+  // Where the files a pattern reads stand.
+  const patterned = new Set<string>();
+  let unplaced = 0;
 
-  for (const path of positionals) {
+  for (const argument of positionals) {
+    const pattern = patterns.get(argument);
+
     try {
-      for (const file of await catalogues(resolve(io.cwd, path), seen)) files.add(file);
+      const found = await catalogues(resolve(io.cwd, pattern ? pattern.base : argument), pattern);
+
+      if (pattern && !found.length) {
+        io.err(`No .json file matches the pattern ${argument}.\n`);
+        unreadable = true;
+      }
+
+      // A pattern reads a file once for each locale, and a directory given as
+      // it is reads one once: by the first argument that reaches it, at the
+      // path through the fewest links, and of those the first in the order of
+      // paths.
+      const ranked = found.map((file) => ({ file, order: file.path.split(sep).join('\0') })).sort((a, b) => a.file.links - b.file.links || byCode(a.order, b.order));
+      const kept: typeof ranked = [];
+
+      for (const { file, order } of ranked) {
+        const [at, id] = pattern ? [placedAt, `${file.real}\0${file.placed.locale ?? given ?? ''}`] : [plainAt, file.real];
+
+        if (pattern) patterned.add(file.real);
+        if (at.has(id)) continue;
+        at.add(id);
+        kept.push({ file, order });
+      }
+
+      for (const { file: { path, real, placed } } of kept.sort((a, b) => byCode(a.order, b.order))) files.push({ path, real, placed: pattern && placed });
     } catch (error) {
-      io.err(`Cannot read ${path}: ${(error as Error).message}\n`);
+      io.err(`Cannot read ${argument}: ${(error as Error).message}\n`);
       unreadable = true;
     }
   }
 
-  for (const path of files) {
+  for (const { path, real, placed } of files) {
+    // A file a pattern reads is read as the pattern places it, whichever path
+    // given as it is reaches it too.
+    if (!placed && patterned.has(real)) continue;
+
     // Written with forward slashes on every platform, as a path in a
     // report is read across them.
     const file = (relative(io.cwd, path) || path).split(sep).join('/');
@@ -242,11 +335,11 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
 
     const at = position(text);
     const read = readCatalogue(text);
-    const inferred = localeOf(file);
-    const locale = given ?? inferred.locale;
-    const { namespace } = inferred;
+    const locale = placed?.locale ?? given;
+    const namespace = placed?.namespace ?? [];
 
     if (locale) locales.add(locale);
+    else unplaced += 1;
 
     if (!read.ok) {
       const { line, column } = at(read.offset);
@@ -274,6 +367,12 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
 
       for (const found of lintMessage(located.value, { modifiers, intl })) report({ file, located, at }, found, { id });
     }
+  }
+
+  if (unplaced) {
+    const [count, their] = unplaced === 1 ? ['1 file has', 'its'] : [`${unplaced} files have`, 'their'];
+
+    io.err(`${count} no locale, so ${their} messages are linted without one, and compared with no other locale's. Name it in a pattern, as in curly-lint "locales/{locale}/{namespace}.json".\n`);
   }
 
   if (source && !locales.has(source)) {

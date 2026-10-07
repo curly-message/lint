@@ -7,7 +7,7 @@ wrote an option for renders whatever the chain holds. This finds them in the
 text of a message or of a catalogue, before anyone renders it.
 
 ```
-$ npx curly-lint locales
+$ npx curly-lint "locales/{locale}/{namespace}.json"
 locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and this selection has no `many` option, so those take the fallback chain.  missing-category
 ```
 
