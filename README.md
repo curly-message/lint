@@ -55,14 +55,22 @@ release carrying that changelog section.
 The plugin pins the library exactly, so the two release together: the library
 first, then a plugin version whose pin names it.
 
+After the tests, the release runs in three jobs, so that no code a dependency
+ships runs where the release's credentials are: one settles the version, one
+installs, builds and benchmarks with no credential that can push or publish,
+and the last takes that build as files. Of the three, only the second runs a
+dependency's code, and only the last holds the credentials, in the `release`
+environment.
+
 The commit, the tag and the release are made as a GitHub App, whose client ID
 and private key the repository holds as the `APP_CLIENT_ID` variable and the
-`APP_PRIVATE_KEY` secret. Its token is minted once the build is done, and no
-dependency runs an install script in the job, so no dependency's code runs
-while the token exists. npm holds no token: the workflow is each package's
-[trusted publisher](https://docs.npmjs.com/trusted-publishers), registered in
-the package's settings on npmjs.com or by naming it to
-`npm trust github @curly-message/lint --file publish.yml --repository curly-message/lint --allow-publish`,
+`APP_PRIVATE_KEY` secret; kept in the `release` environment alone, which only
+`main` can deploy to, the key is out of every other job's reach. npm holds no
+token: the workflow is each package's
+[trusted publisher](https://docs.npmjs.com/trusted-publishers), registered,
+with `release` as its environment, in the package's settings on npmjs.com or
+by naming it to
+`npm trust github @curly-message/lint --file publish.yml --repository curly-message/lint --environment release --allow-publish`,
 then the same for `@curly-message/eslint-plugin`.
 A trusted publisher can be registered only for a package that exists, so the
 first version of each, `1.0.0-next.0`, is published by hand from `main` by a
