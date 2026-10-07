@@ -1,5 +1,4 @@
 import { readFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
 import json from '@eslint/json';
 import { RULES } from '@curly-message/lint';
 import { Linter } from 'eslint';
@@ -18,7 +17,7 @@ const config = (settings?: Settings): Linter.Config[] => [
   ...(settings ? [{ settings: { 'curly-message': settings } }] : []),
 ];
 
-const lint = (code: string | SourceCode, filename: string, settings?: Settings, by = linter) => by.verify(code, config(settings), { filename })
+const lint = (code: string | SourceCode, filename: string, settings?: Settings) => linter.verify(code, config(settings), { filename })
   .map(({ ruleId, line, column, endLine, endColumn, severity, message }) => ({ ruleId, at: `${line}:${column}-${endLine}:${endColumn}`, severity, message }));
 
 describe('the plugin', () => {
@@ -73,8 +72,8 @@ describe('in JavaScript', () => {
     ]);
   });
 
-  it('lints every property of a catalogue module, with the locale its path names', () => {
-    const found = lint("export default {\n  files: '{{n:plural; one:a; other:b;}}',\n  nested: { esc: 'C:\\\\d {{v; a:A; A:B;}}' },\n};", 'src/translations/cs/common.js', { catalogue: true });
+  it('lints every property of a catalogue module, with the locale the settings name', () => {
+    const found = lint("export default {\n  files: '{{n:plural; one:a; other:b;}}',\n  nested: { esc: 'C:\\\\d {{v; a:A; A:B;}}' },\n};", 'src/translations/cs/common.js', { catalogue: true, locale: 'cs' });
 
     expect(found.map(({ ruleId, at }) => `${ruleId} ${at}`)).toEqual([
       '@curly-message/missing-category 2:15-2:21',
@@ -91,18 +90,11 @@ describe('in JavaScript', () => {
     expect(found.map(({ at }) => at)).toEqual(['1:30-1:32', '1:49-1:51']);
   });
 
-  it('gives a call in a catalogue module no locale from its path', () => {
-    const code = "export default { files: '{{n:plural; one:a; other:b;}}' };\nresolve('{{n:plural; one:a; other:b;}}');";
-
-    expect(lint(code, 'src/translations/cs/helpers.js', { catalogue: true }).map(({ at }) => at)).toEqual(['1:30-1:36', '1:30-1:36']);
-  });
-
-  it('reads the locale off the path from the working directory', () => {
-    // `ms` names Malay, which has no `one` or `few`.
-    const project = resolve('/home/ms/project');
-    const inProject = new Linter({ configType: 'flat', cwd: project });
-
-    expect(lint('{ "files": "{{n:plural; one:a; few:b; other:c;}}" }', join(project, 'locales/common.json'), undefined, inProject)).toEqual([]);
+  it('reads no locale off a path', () => {
+    // `be` names Belarusian, which has `few` and `many`, and `ms` Malay,
+    // which has neither `one` nor `few`.
+    expect(lint("export default { files: '{{n:plural; one:a; other:b;}}' };", 'src/translations/be/common.js', { catalogue: true })).toEqual([]);
+    expect(lint('{ "files": "{{n:plural; one:a; few:b; other:c;}}" }', 'locales/ms/common.json')).toEqual([]);
   });
 
   it('reads the modifiers Intl defines as unknown where the host satisfies Core alone', () => {
@@ -132,11 +124,18 @@ describe('in JSON', () => {
     ]);
   });
 
-  it('reads the locale the path names', () => {
+  it('reads the locale the block of the config that matches a catalogue names', () => {
+    const blocks = ['en', 'cs'].map((locale): Linter.Config => ({
+      files: [`locales/${locale}/**/*.json`],
+      language: 'json/json',
+      plugins: { json, '@curly-message': plugin },
+      rules: plugin.configs.recommended.rules,
+      settings: { 'curly-message': { locale } },
+    }));
     const text = '{ "files": "{{n:plural; one:soubor; few:soubory; other:soubor\u016f;}}" }';
 
-    expect(lint(text, 'locales/cs/common.json').map(({ ruleId }) => ruleId)).toEqual(['@curly-message/missing-category']);
-    expect(lint(text, 'locales/common.json')).toEqual([]);
+    expect(linter.verify(text, blocks, { filename: 'locales/cs/common.json' }).map(({ ruleId }) => ruleId)).toEqual(['@curly-message/missing-category']);
+    expect(linter.verify(text, blocks, { filename: 'locales/en/common.json' }).map(({ ruleId }) => ruleId)).toEqual(['@curly-message/unused-category']);
   });
 
   it('lints no member name', () => {
@@ -147,10 +146,10 @@ describe('in JSON', () => {
     expect(lint('"Hi {{name"', 'locales/en/greeting.json').map(({ at }) => at)).toEqual(['1:5-1:7']);
   });
 
-  it('lints a file anew under another name', () => {
+  it('lints a file anew under other settings', () => {
     const text = '{ "files": "{{n:plural; one:soubor; few:soubory; other:soubor\u016f;}}" }';
 
-    expect(lint(text, 'locales/cs/common.json').map(({ ruleId }) => ruleId)).toEqual(['@curly-message/missing-category']);
-    expect(lint(linter.getSourceCode(), 'locales/en/common.json').map(({ ruleId }) => ruleId)).toEqual(['@curly-message/unused-category']);
+    expect(lint(text, 'common.json', { locale: 'cs' }).map(({ ruleId }) => ruleId)).toEqual(['@curly-message/missing-category']);
+    expect(lint(linter.getSourceCode(), 'common.json', { locale: 'en' }).map(({ ruleId }) => ruleId)).toEqual(['@curly-message/unused-category']);
   });
 });
