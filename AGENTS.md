@@ -53,7 +53,7 @@ Tech stack — **ground truth, do not assume otherwise**:
 | Tests | vitest |
 | Lint | ESLint flat config with `@stylistic`, run by a pre-commit hook |
 | Dependencies | the library: `@curly-message/parser` as a peer, and as a `devDependency` to build and test against; the plugin: the library pinned exactly, the parser as a peer, ESLint 9+ as a peer |
-| Supported runtimes | Node 22+ |
+| Supported runtimes | Node 22+, Bun, Deno 2 |
 | CI | `tests.yml`, `publish.yml` |
 
 Commands, run from the root:
@@ -62,6 +62,7 @@ Commands, run from the root:
 |---------|--------------|
 | `npm ci` | install from the lockfile |
 | `npm test` | build, typecheck, lint, then the suite against the source and against the build, for every workspace — what CI runs |
+| `npm run test:bun`, `npm run test:deno` | build, then the suite on Bun or Deno, for every workspace — what the runtime legs of CI run |
 | `npm run lint:fix` | fix what the formatting contract reports |
 
 Map of `lint/src/`:
