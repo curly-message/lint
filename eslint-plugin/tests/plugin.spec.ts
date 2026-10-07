@@ -6,8 +6,8 @@ import { Linter } from 'eslint';
 import type { SourceCode } from 'eslint';
 import tseslint from 'typescript-eslint';
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import plugin from '../src';
-import type { Settings } from '../src';
+import plugin from '@curly-message/eslint-plugin';
+import type { Settings } from '@curly-message/eslint-plugin';
 
 const linter = new Linter({ configType: 'flat' });
 

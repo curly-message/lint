@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { localeOf, readCatalogue } from '../src';
-import type { Read } from '../src';
+import { localeOf, readCatalogue } from '@curly-message/lint';
+import type { Read } from '@curly-message/lint';
 
 const ok = (read: Read) => {
   if (!read.ok) throw new Error(read.message);

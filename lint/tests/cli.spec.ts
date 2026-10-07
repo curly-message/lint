@@ -1,6 +1,8 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { run } from '../src/run';
 
@@ -177,5 +179,23 @@ describe('curly-lint', () => {
     expect((await cli('--format', 'xml', '.')).code).toBe(2);
     expect(await cli('missing')).toMatchObject({ code: 2, err: expect.stringContaining('Cannot read missing') as unknown });
     expect(await cli('--help')).toMatchObject({ code: 0, out: expect.stringContaining('Usage: curly-lint') as unknown });
+  });
+});
+
+// What a project installs as `curly-lint`: the build, run by the interpreter
+// its first line names. The suite above drives the source's `run`; this runs
+// what the build made of it.
+describe('the built command', () => {
+  const bin = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+
+  it('runs as the bin, and exits as the source does', async () => {
+    await files({ 'en.json': '{"a": "{{v"}' });
+
+    const { status, stdout } = spawnSync('node', [bin, 'en.json'], { cwd, encoding: 'utf8' });
+    const { code, out } = await cli('en.json');
+
+    expect(await readFile(bin, 'utf8')).toMatch(/^#!\/usr\/bin\/env node\n/);
+    expect(out).toContain('unclosed-placeholder');
+    expect({ status, stdout }).toEqual({ status: code, stdout: out });
   });
 });
