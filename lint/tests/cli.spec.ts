@@ -747,6 +747,42 @@ describe('curly-lint', () => {
     });
   });
 
+  it('reports a file it cannot read, and compares nothing under its namespace', async () => {
+    refused.add('cs/admin.json');
+    await files({
+      'locales/en/common.json': '{"hi": "Hi", "bye": "Bye"}',
+      'locales/en/admin.json': '{"title": "Users"}',
+      'locales/cs/common.json': '{"hi": "{{"}',
+      'locales/cs/admin.json': '{"title": "Uzivatele"}',
+    });
+
+    const pattern = 'locales/{locale}/{namespace}.json';
+
+    // Nothing under `admin` is compared, as what `cs` holds there is unknown.
+    expect(await cli(pattern)).toEqual({
+      code: 2,
+      out: [
+        'locales/cs/common.json:1:9  error  `{{` opens no placeholder: nothing closes it on its line, so it renders as text.  unclosed-placeholder',
+        'locales/en/common.json:1:21  warning  `cs` has no message `common.bye`.  missing-message',
+        '',
+        '2 problems (1 error, 1 warning)',
+        '',
+      ].join('\n'),
+      err: expect.stringMatching(/^Cannot read locales\/cs\/admin\.json: [^\n]*\n$/) as unknown,
+    });
+
+    // A locale written for is one, whether or not its files can be read.
+    refused.add('cs/common.json');
+    expect(await cli(pattern, '--source', 'cs')).toEqual({ code: 2, out: '', err: expect.stringMatching(/^Cannot read locales\/cs\/admin\.json: [^\n]*\nCannot read locales\/cs\/common\.json: [^\n]*\n$/) as unknown });
+  });
+
+  it('names a file it cannot read once, however many locales it is read in', async () => {
+    refused.add('x/en.json');
+    await files({ 'x/en.json': '{"hi": "Hi"}', 'x/de.json': '{"hi": "Hallo"}' });
+
+    expect(await cli('x/{namespace}.json', 'x/{locale}.json', '--locale', 'cs')).toEqual({ code: 2, out: '', err: expect.stringMatching(/^Cannot read x\/en\.json: [^\n]*\n$/) as unknown });
+  });
+
   it('reads a file a pattern reads as the pattern does, whatever path a directory given as it is reaches it at', async () => {
     await files({ 'shared/en/common.json': '{"hi": "{{"}', 'locales/cs/common.json': '{"hi": "Ahoj"}', 'config/app.json': '{"x": "{{"}' });
     await link('shared/en', 'locales/en');
