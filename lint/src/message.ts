@@ -89,12 +89,8 @@ const spelling = (message: string, { start, end }: { start: number, end: number 
  */
 export const lintMessage = (message: string, options: MessageOptions = {}): Finding[] => lintTree(message, read(message), options);
 
-/** Lints a message `read` has read, or found too deep to read. */
-export const lintTree = (message: string, tree: Tree | undefined, options: MessageOptions = {}): Finding[] => {
-  if (!tree) {
-    return [finding('nesting-limit', '13', `This message nests placeholders deeper than can be read here, far past the ${MAX_NESTING} levels resolution goes, so each placeholder past them takes its fallback chain.`, 0, message.length)];
-  }
-
+/** Lints a message `read` has read. */
+export const lintTree = (message: string, tree: Tree, options: MessageOptions = {}): Finding[] => {
   const hosted = options.modifiers ?? [];
   const defined = definedBy(options.intl);
   const placeholders = resolvable(tree);
