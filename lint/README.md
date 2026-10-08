@@ -93,7 +93,9 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 A file that is not JSON is an [`unreadable-catalogue`](#unreadable-catalogue)
 error at the place its reading stops, and so is one nested deeper than 512
 levels. The command exits 1 where it finds an error, 2 where its arguments are
-wrong, a path cannot be read or a pattern names no file, and 0 otherwise.
+wrong, a path cannot be read, a pattern names no file or its output cannot be
+written, as on a full disk, and 0 otherwise. A reader that closes its output
+early, as `head` does, ends the report but changes none of these.
 
 ## The library
 

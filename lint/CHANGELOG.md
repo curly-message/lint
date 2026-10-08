@@ -25,6 +25,8 @@ Format, as a library and as the `curly-lint` command.
   many files it read without a locale. It points each finding at its line and
   column, past the escape sequences JSON spells a string with. A file that is
   not JSON is an `unreadable-catalogue` error, and nothing under its namespace
-  is compared.
+  is compared. A reader that closes the output early, as `head` does, ends the
+  report, not the run: the command exits as the lint decided. Output that
+  cannot be written, as on a full disk, is said on stderr and exits 2.
 * **The library** exports `lintMessage`, `lintCatalogue`, `lintEntries`,
   `entriesOf`, `flatten`, `readCatalogue` and the `RULES` table.
