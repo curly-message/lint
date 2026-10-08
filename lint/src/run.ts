@@ -267,6 +267,8 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
 
   const entries: Entry[] = [];
   const sources: Source[] = [];
+  // Where each file stands in the order the files are read in.
+  const ranks = new Map<string, number>();
   // Every locale a file is written for, one with no message included.
   const locales = new Set<string>();
   // The namespaces of the files that are not JSON. What such a file holds is
@@ -329,6 +331,8 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
     // report is read across them.
     const file = (relative(io.cwd, path) || path).split(sep).join('/');
     let text: string;
+
+    if (!ranks.has(file)) ranks.set(file, ranks.size);
 
     try {
       text = await readFile(path, 'utf8');
@@ -397,9 +401,8 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
     report(sources[compared[found.entry]], found, { locale: found.locale, id: found.id });
   }
 
-  problems.sort((a, b) => a.file.localeCompare(b.file) || a.line - b.line || a.column - b.column);
-
-  const shown = values.quiet ? problems.filter(({ severity }) => severity === 'error') : problems;
+  const sorted = problems.map((problem) => ({ problem, rank: ranks.get(problem.file) ?? 0 })).sort((a, b) => a.rank - b.rank || a.problem.line - b.problem.line || a.problem.column - b.problem.column).map(({ problem }) => problem);
+  const shown = values.quiet ? sorted.filter(({ severity }) => severity === 'error') : sorted;
 
   if (values.format === 'json') {
     io.out(`${JSON.stringify(shown, null, 2)}\n`);
