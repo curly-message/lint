@@ -157,9 +157,7 @@ to select from (section 9.5). `{{n:number}}` selects nothing and is complete.
 #### `nesting-limit`
 
 Error. A placeholder written more than eight levels deep is never resolved
-(section 13), so no other rule reads it or what it holds. A message nested
-thousands of levels deep, past what the linter reads, is one finding over the
-whole message.
+(section 13), so no other rule reads it or what it holds.
 
 #### `default-case`
 

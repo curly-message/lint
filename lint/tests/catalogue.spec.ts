@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { entriesOf, flatten, lintCatalogue, lintEntries } from '@curly-message/lint';
-import { DEEP, overflowing } from './overflow';
 
 const codes = (found: ReturnType<typeof lintCatalogue>) => found.map(({ code, locale, id }) => `${code} ${locale} ${id}`);
 
@@ -149,10 +148,11 @@ describe('a catalogue', () => {
     expect(codes(lintCatalogue({ en: { m: wrapped('{{x}}') }, cs: { m: wrapped('{{y}}') } }))).toEqual(['nesting-limit en m', 'nesting-limit cs m']);
   });
 
-  it('compares nothing with a message nested deeper than a call stack goes', DEEP, () => {
-    const deep = overflowing();
+  it('compares a message nested deeper than any call stack goes by the levels resolution reaches', () => {
+    const deep = `${'{{v; a:'.repeat(100_000)}x${'}}'.repeat(100_000)}`;
 
-    expect(codes(lintCatalogue({ en: { m: deep }, cs: { m: '{{w}}' } }))).toEqual(['nesting-limit en m']);
+    // `cs` never reads `v`, which `en` reads at every level, and reads `w`.
+    expect(codes(lintCatalogue({ en: { m: deep }, cs: { m: '{{w}}' } }))).toEqual(['nesting-limit en m', 'parameter-mismatch cs m', 'parameter-mismatch cs m']);
   });
 
   it('reads no accessor of a catalogue', () => {

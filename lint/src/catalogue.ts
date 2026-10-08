@@ -123,8 +123,8 @@ const namesOf = (tree: Tree): Names => {
   return names;
 };
 
-/** A message a locale is compared by, and its names where it could be read. */
-type Read = { entry: number, names?: Names };
+/** A message a locale is compared by, and its names. */
+type Read = { entry: number, names: Names };
 
 // The numbers the options of selections give text of their own. A number key
 // of `plural` selects for the number it reads as (section 11.5), and a key of
@@ -162,7 +162,7 @@ export const lintEntries = (entries: readonly Entry[], options: EntriesOptions =
     if (messages.has(id)) {
       make(entry, 'duplicate-id', undefined, `${quoted(id)} is defined again in ${quoted(locale)}, so one of the two messages is never read.`);
     } else {
-      messages.set(id, { entry, names: tree && namesOf(tree) });
+      messages.set(id, { entry, names: namesOf(tree) });
     }
   });
 
@@ -186,7 +186,7 @@ export const lintEntries = (entries: readonly Entry[], options: EntriesOptions =
         continue;
       }
 
-      if (names && compared.names) compare(source, compared.names, entry, names, modifiers, make);
+      compare(source, compared.names, entry, names, modifiers, make);
     }
   }
 

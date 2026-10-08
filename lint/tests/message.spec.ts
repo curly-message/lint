@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { lintMessage, RULES } from '@curly-message/lint';
 import type { MessageOptions } from '@curly-message/lint';
-import { DEEP, overflowing } from './overflow';
 
 // The code, the text it points at, and nothing else, so a case reads as the
 // message it is about.
@@ -74,10 +73,10 @@ describe('a message, read alone', () => {
     expect(lint(wrapped('{{v; default:\\x;}}')).map(([code]) => code)).toEqual(['nesting-limit', 'inert-escape']);
   });
 
-  it('nesting-limit: a message nested deeper than a call stack goes, which never throws', DEEP, () => {
-    const deep = overflowing();
+  it('nesting-limit: a message nested deeper than any call stack goes, at the placeholder past the limit', () => {
+    const deep = `${'{{v; a:'.repeat(100_000)}x${'}}'.repeat(100_000)}`;
 
-    expect(lintMessage(deep)).toMatchObject([{ code: 'nesting-limit', start: 0, end: deep.length }]);
+    expect(lintMessage(deep)).toMatchObject([{ code: 'nesting-limit', start: 8 * 7, end: deep.length - 8 * 2 }]);
   });
 
   it('default-case: `default` spelled in another case is an option', () => {
