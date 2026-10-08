@@ -73,6 +73,22 @@ describe('curly-lint', () => {
     ]);
   });
 
+  it('lists the files in the order they are read in, whatever the runtime\'s locale', async () => {
+    await files({ 'a/x.json': '{"a": "{{"}', 'B/x.json': '{"b": "{{"}', 'a-b/x.json': '{"c": "{{"}', 'a_b/x.json': '{"d": "{{"}' });
+
+    const order = async (...argv: string[]) => (await cli(...argv)).out.split('\n').map((line) => line.split(':')[0]).slice(0, -3);
+
+    expect(await order('.')).toEqual(['B/x.json', 'a/x.json', 'a-b/x.json', 'a_b/x.json']);
+    expect(await order('a_b', 'B')).toEqual(['a_b/x.json', 'B/x.json']);
+
+    // Listed where it is read, not by the path it is shown at.
+    await files({ 'q/x.json': '{"e": "{{"}', 'x.json': '{"f": "{{"}' });
+
+    let out = '';
+    await run(['..'], { cwd: join(cwd, 'q'), out: (text) => { out += text; }, err: () => undefined });
+    expect(out.split('\n').map((line) => line.split(':')[0]).slice(0, -3)).toEqual(['../B/x.json', '../a/x.json', '../a-b/x.json', '../a_b/x.json', 'x.json', '../x.json']);
+  });
+
   it('reads no locale off a path no pattern places one in', async () => {
     // `be` names Belarusian, and `nds` Low German where the host has rules
     // for it: neither is the locale of what these files hold.
