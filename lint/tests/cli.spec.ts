@@ -338,6 +338,10 @@ describe('curly-lint', () => {
     expect(err).toContain('Cannot read locales/de/old.json');
     // A link that cannot be read is reported once, at the first argument's path to it.
     expect(await cli('locales/{locale}/{namespace}.json', 'public/locales/{locale}/{namespace}.json')).toMatchObject({ code: 2, err: expect.stringMatching(/^Cannot read locales\/de\/old\.json: [^\n]*\n$/) as unknown });
+    // Given as it is, too: once, at the path a file that can be read is read at.
+    for (const other of ['locales/{locale}/{namespace}.json', 'locales']) {
+      expect(await cli('locales/de/old.json', other)).toMatchObject({ code: 2, err: expect.stringMatching(/^Cannot read locales\/de\/old\.json: [^\n]*\n(?!Cannot)/) as unknown });
+    }
     expect(out).toContain('locales/cs/common.json:1:14  error  `jmeno` is read here');
     expect(out).toContain('locales/de/common.json:1:15  error  `{{` opens no placeholder');
   });
