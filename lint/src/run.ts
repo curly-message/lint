@@ -35,10 +35,10 @@ the arguments are wrong, a path cannot be read, a pattern names no file or
 the output cannot be written, and 0 otherwise. A reader that closes the
 output early, as head does, ends the report but changes none of these.
 
-What a file that is not JSON holds is unknown, so nothing under its
-namespace is compared. What a directory that cannot be read holds is
-unknown too, so where its files would be read in a locale, no locale is
-compared with another.`;
+What a file that cannot be read or is not JSON holds is unknown, so
+nothing under its namespace is compared. What a directory that cannot be
+read holds is unknown too, so where its files would be read in a locale,
+no locale is compared with another.`;
 
 export type Io = {
   cwd: string,
@@ -321,8 +321,9 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
   const ranks = new Map<string, number>();
   // Every locale a file is written for, one with no message included.
   const locales = new Set<string>();
-  // The namespaces of the files that are not JSON. What such a file holds is
-  // unknown, so no message under one is compared, in any locale.
+  // The namespaces of the files that cannot be read or are not JSON. What
+  // such a file holds is unknown, so no message under one is compared, in any
+  // locale.
   const unknown = new Set<string>();
   // Whether any locale is compared with another: not where a directory that
   // cannot be read would hold files of a locale, as what any locale holds is
@@ -342,7 +343,7 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
   // Where the files a pattern reads stand.
   const patterned = new Set<string>();
   let unplaced = 0;
-  // Where the directories that cannot be read stand.
+  // Where the files and directories that cannot be read stand.
   const unreadAt = new Set<string>();
   // Written with forward slashes on every platform, as a path in a
   // report is read across them.
@@ -402,6 +403,8 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
     if (!placed && patterned.has(real)) continue;
 
     const file = shownAt(path);
+    const locale = placed?.locale ?? given;
+    const namespace = placed?.namespace ?? [];
     let text: string;
 
     if (!ranks.has(file)) ranks.set(file, ranks.size);
@@ -409,15 +412,20 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
     try {
       text = await readFile(path, 'utf8');
     } catch (error) {
-      io.err(`Cannot read ${file}: ${(error as Error).message}\n`);
+      if (!unreadAt.has(real)) io.err(`Cannot read ${file}: ${(error as Error).message}\n`);
+      unreadAt.add(real);
       unreadable = true;
+
+      if (locale) {
+        locales.add(locale);
+        unknown.add(namespace.join('.'));
+      }
+
       continue;
     }
 
     const at = position(text);
     const read = readCatalogue(text);
-    const locale = placed?.locale ?? given;
-    const namespace = placed?.namespace ?? [];
 
     if (locale) locales.add(locale);
     else unplaced += 1;
