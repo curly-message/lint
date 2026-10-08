@@ -1,7 +1,7 @@
 import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
-import { lintEntries } from './catalogue';
+import { lintEntriesComparing } from './catalogue';
 import type { Entry } from './catalogue';
 import { hidden, readPattern, tagOf } from './locale';
 import type { Pattern, Placed, Reader, Reading } from './locale';
@@ -33,7 +33,12 @@ Options:
 Exits 1 where an error is found, a file that is not JSON included, 2 where
 the arguments are wrong, a path cannot be read, a pattern names no file or
 the output cannot be written, and 0 otherwise. A reader that closes the
-output early, as head does, ends the report but changes none of these.`;
+output early, as head does, ends the report but changes none of these.
+
+What a file that is not JSON holds is unknown, so nothing under its
+namespace is compared. What a directory that cannot be read holds is
+unknown too, so where its files would be read in a locale, no locale is
+compared with another.`;
 
 export type Io = {
   cwd: string,
@@ -66,12 +71,25 @@ const PLAIN: Reader = {
 // By code units, which neither the runtime nor its locale orders otherwise.
 const byCode = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-const isDirectory = (path: string) => stat(path).then((found) => found.isDirectory(), () => false);
+// A path that is not there: missing, below a file, or a loop of links.
+const MISSING = new Set(['ENOENT', 'ENOTDIR', 'ELOOP']);
+
+const missing = (error: unknown) => MISSING.has((error as { code?: string } | undefined)?.code ?? '');
+
+// Whether a link leads to a directory, and why it cannot be followed where
+// what it leads to is there: nothing where it is not.
+const follow = (path: string): Promise<{ directory: boolean, error?: unknown } | undefined> => stat(path).then(
+  (found) => ({ directory: found.isDirectory() }),
+  (error: unknown) => (missing(error) ? undefined : { directory: false, error }),
+);
 
 // Whether a directory is another or holds it, both where they stand.
 const holds = (outer: string, inner: string) => inner === outer || inner.startsWith(outer.endsWith(sep) ? outer : `${outer}${sep}`);
 
 type Found = { path: string, real: string, placed: Placed, links: number };
+
+// A directory that cannot be read, where it stands, and why.
+type Unread = { path: string, real: string, error: unknown };
 
 // The files a path names, each with where it stands, what it is read as and
 // the links followed to reach it: a file given as it is, or the .json files
@@ -79,21 +97,35 @@ type Found = { path: string, real: string, placed: Placed, links: number };
 // keys apart, at the path with the fewest links, so a link only adds to what
 // the paths without one read. A link is not followed to a directory that
 // holds it, nor to the directory searched or one holding it. Each path reads
-// its base afresh, as which links it follows turns on the base.
-const catalogues = async (path: string, pattern: Pattern | undefined): Promise<Found[]> => {
-  const found = await stat(path).catch(async (error: unknown) => {
-    // A link that cannot be followed is a file that cannot be read, as below a directory.
-    if (pattern || !(await lstat(path).catch(() => undefined))?.isSymbolicLink()) throw error;
-  });
+// its base afresh, as which links it follows turns on the base. A directory
+// that cannot be read is listed, and the walk goes on past it: one that
+// cannot be listed, and one that cannot be reached, which is the base, a
+// path given as it is that is no link, or a link the readings enter and read
+// as no file. A path that is not there is none, and below a directory, a
+// link to one is none either.
+const catalogues = async (path: string, pattern: Pattern | undefined): Promise<{ files: Found[], unread: Unread[] }> => {
+  let found;
+
+  try {
+    found = await stat(path);
+  } catch (error) {
+    // A link given as it is that cannot be followed is a file that cannot be
+    // read, as below a directory where the readings read it as a file.
+    const linked = !pattern && (await lstat(path).catch(() => undefined))?.isSymbolicLink();
+
+    if (!linked && missing(error)) throw error;
+    if (!linked) return { files: [], unread: [{ path, real: path, error }] };
+  }
 
   // A file given as it is need stand nowhere, as a pipe does not.
-  if (!found?.isDirectory()) return pattern ? [] : [{ path, real: await realpath(path).catch(() => realpath(dirname(path)).then((at) => join(at, basename(path)), () => path)), placed: PLAIN.start.placed, links: 0 }];
+  if (!found?.isDirectory()) return { unread: [], files: pattern ? [] : [{ path, real: await realpath(path).catch(() => realpath(dirname(path)).then((at) => join(at, basename(path)), () => path)), placed: PLAIN.start.placed, links: 0 }] };
 
   const real = await realpath(path);
   const reader = pattern ?? PLAIN;
   const seen = new Set<string>();
   const files: Found[] = [];
   const linked: [string, string, Reading[], number][] = [];
+  const unread: Unread[] = [];
 
   const read = async (directory: string, at: string, readings: Reading[], links: number) => {
     const fresh: Reading[] = [];
@@ -107,7 +139,17 @@ const catalogues = async (path: string, pattern: Pattern | undefined): Promise<F
 
     if (!fresh.length) return;
 
-    for (const entry of (await readdir(directory, { withFileTypes: true })).sort((a, b) => byCode(a.name, b.name))) {
+    let entries;
+
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch (error) {
+      unread.push({ path: directory, real: at, error });
+
+      return;
+    }
+
+    for (const entry of entries.sort((a, b) => byCode(a.name, b.name))) {
       const { name } = entry;
       const link = entry.isSymbolicLink();
       // What the readings take the entry for, asked before a link is
@@ -118,8 +160,13 @@ const catalogues = async (path: string, pattern: Pattern | undefined): Promise<F
       if (!next.length && !placings.some(Boolean)) continue;
 
       const child = join(directory, name);
+      const followed = link ? await follow(child) : { directory: entry.isDirectory() };
 
-      if (entry.isDirectory() || (link && await isDirectory(child))) {
+      // A link to a path that is not there is passed over, as no file or
+      // directory stands at its path.
+      if (!followed) continue;
+
+      if (followed.directory) {
         if (!next.length) continue;
         if (link) linked.push([child, at, next, links + 1]);
         else await read(child, join(at, name), next, links);
@@ -127,6 +174,8 @@ const catalogues = async (path: string, pattern: Pattern | undefined): Promise<F
         const target = link ? await realpath(child).catch(() => join(at, name)) : join(at, name);
 
         for (const placed of placings) if (placed) files.push({ path: child, real: target, placed, links: link ? links + 1 : links });
+      } else if ('error' in followed) {
+        unread.push({ path: child, real: join(at, name), error: followed.error });
       }
     }
   };
@@ -140,7 +189,7 @@ const catalogues = async (path: string, pattern: Pattern | undefined): Promise<F
     if (!holds(target, holder) && !holds(target, real)) await read(child, target, readings, links);
   }
 
-  return files;
+  return { files, unread };
 };
 
 // Line and column, both from 1, of an offset in a text. A byte order mark
@@ -275,12 +324,17 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
   // The namespaces of the files that are not JSON. What such a file holds is
   // unknown, so no message under one is compared, in any locale.
   const unknown = new Set<string>();
+  // Whether any locale is compared with another: not where a directory that
+  // cannot be read would hold files of a locale, as what any locale holds is
+  // then unknown.
+  let comparable = true;
   let unreadable = false;
 
   // The files to read, in the order of the arguments and of the paths each
   // reaches, with where each stands and what a pattern places in it, which a
-  // path given as it is does not.
-  const files: { path: string, real: string, placed?: Placed }[] = [];
+  // path given as it is does not; and in that order, each directory that
+  // cannot be read, with why.
+  const files: { path: string, real: string, placed?: Placed, unread?: { error: unknown } }[] = [];
   // Each file a pattern reads by where it stands and the locale it is read
   // in, and each a path given as it is reads by where it stands.
   const placedAt = new Set<string>();
@@ -288,17 +342,24 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
   // Where the files a pattern reads stand.
   const patterned = new Set<string>();
   let unplaced = 0;
+  // Where the directories that cannot be read stand.
+  const unreadAt = new Set<string>();
+  // Written with forward slashes on every platform, as a path in a
+  // report is read across them.
+  const shownAt = (path: string) => (relative(io.cwd, path) || '.').split(sep).join('/');
 
   for (const argument of positionals) {
     const pattern = patterns.get(argument);
 
     try {
-      const found = await catalogues(resolve(io.cwd, pattern ? pattern.base : argument), pattern);
+      const { files: found, unread } = await catalogues(resolve(io.cwd, pattern ? pattern.base : argument), pattern);
 
-      if (pattern && !found.length) {
+      if (pattern && !found.length && !unread.length) {
         io.err(`No .json file matches the pattern ${argument}.\n`);
         unreadable = true;
       }
+
+      if (unread.length && (given !== undefined || pattern?.locates)) comparable = false;
 
       // A pattern reads a file once for each locale, and a directory given as
       // it is reads one once: by the first argument that reaches it, at the
@@ -316,21 +377,31 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
         kept.push({ file, order });
       }
 
-      for (const { file: { path, real, placed } } of kept.sort((a, b) => byCode(a.order, b.order))) files.push({ path, real, placed: pattern && placed });
+      const listed = [
+        ...kept.map(({ file: { path, real, placed }, order }) => ({ order, file: { path, real, placed: pattern && placed } })),
+        ...unread.map(({ path, real, error }) => ({ order: path.split(sep).join('\0'), file: { path, real, unread: { error } } })),
+      ];
+
+      for (const { file } of listed.sort((a, b) => byCode(a.order, b.order))) files.push(file);
     } catch (error) {
       io.err(`Cannot read ${argument}: ${(error as Error).message}\n`);
       unreadable = true;
     }
   }
 
-  for (const { path, real, placed } of files) {
+  for (const { path, real, placed, unread } of files) {
+    if (unread) {
+      if (!unreadAt.has(real)) io.err(`Cannot read ${shownAt(path)}: ${(unread.error as Error).message}\n`);
+      unreadAt.add(real);
+      unreadable = true;
+      continue;
+    }
+
     // A file a pattern reads is read as the pattern places it, whichever path
     // given as it is reaches it too.
     if (!placed && patterned.has(real)) continue;
 
-    // Written with forward slashes on every platform, as a path in a
-    // report is read across them.
-    const file = (relative(io.cwd, path) || path).split(sep).join('/');
+    const file = shownAt(path);
     let text: string;
 
     if (!ranks.has(file)) ranks.set(file, ranks.size);
@@ -385,21 +456,20 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
     io.err(`${count} no locale, so ${their} messages are linted without one, and compared with no other locale's. Name it in a pattern, as in curly-lint "locales/{locale}/{namespace}.json".\n`);
   }
 
-  if (source && !locales.has(source)) {
+  if (!comparable) io.err('What a directory that cannot be read holds is unknown, so no locale is compared with another.\n');
+
+  if (source && comparable && !locales.has(source)) {
     io.err(`No file given is written for the source locale \`${source}\`.\n`);
 
     return 2;
   }
 
-  const compared: number[] = [];
+  // Each message is linted with its locale, and each locale on its own; a
+  // message is compared only where what both locales hold is known.
+  const comparing = comparable && ((id: string) => !under(unknown, id));
 
-  for (const [index, { locale, id, message }] of entries.entries()) {
-    if (!under(unknown, id)) compared.push(index);
-    else for (const found of lintMessage(message, { modifiers, intl, locale })) report(sources[index], found, { locale, id });
-  }
-
-  for (const found of lintEntries(compared.map((index) => entries[index]), { modifiers, intl, source, locales: [...locales] })) {
-    report(sources[compared[found.entry]], found, { locale: found.locale, id: found.id });
+  for (const found of lintEntriesComparing(entries, { modifiers, intl, source, locales: [...locales] }, comparing)) {
+    report(sources[found.entry], found, { locale: found.locale, id: found.id });
   }
 
   const sorted = problems.map((problem) => ({ problem, rank: ranks.get(problem.file) ?? 0 })).sort((a, b) => a.rank - b.rank || a.problem.line - b.problem.line || a.problem.column - b.problem.column).map(({ problem }) => problem);

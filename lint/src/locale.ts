@@ -25,6 +25,8 @@ export type Reader = {
 export type Pattern = Reader & {
   /** The directory before the first placeholder, written with `/`. */
   base: string,
+  /** Whether a path the pattern reads places the locale of its files. */
+  locates: boolean,
 };
 
 const LOCALE = '{locale}';
@@ -156,6 +158,7 @@ export const readPattern = (pattern: string): ({ ok: true } & Pattern) | { ok: f
   return {
     ok: true,
     base: pattern.slice(0, split).replace(/\\/g, '/') || '.',
+    locates: pattern.includes(LOCALE),
     start: { at: 0, span: [], placed: { namespace: [] } },
     enter: ({ at, span, placed }, name) => {
       if (at !== spanning) {

@@ -92,8 +92,24 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 
 A file that is not JSON is an [`unreadable-catalogue`](#unreadable-catalogue)
 error at the place its reading stops, and so is one nested deeper than 512
-levels. The command exits 1 where it finds an error, 2 where its arguments are
-wrong, a path cannot be read, a pattern names no file or its output cannot be
+levels. A file or a directory the command cannot read is named on standard
+error, with why, and the rest is still read and linted; standard output
+carries findings alone, in either format. What a directory it cannot read
+holds is unknown. Where its files would be read in a locale — below a pattern
+that places one, or with `--locale` — no locale is compared with another in
+that run, and the command says so on standard error: a directory where the
+locale is not yet placed could hold more of any locale, and one where it is,
+more of that one alone, and both are taken alike, for simplicity. Each message
+is still linted with its locale, and each locale on its own, as for an id
+defined twice. Files read in no locale are compared with nothing, so a
+directory whose files would be leaves every comparison in place. A link to a
+path that is not there — missing, below a file, or a loop of links — is passed
+over wherever it stands, as if nothing stood at its path, and an argument that
+names one, or any other path that is not there, cannot be read. A link to a
+path that is there but cannot be reached is a directory the command cannot
+read, or a file it cannot read where the command would read one at its path.
+The command exits 1 where it finds an error, 2 where its arguments are wrong,
+a path cannot be read, a pattern names no file or its output cannot be
 written, as on a full disk, and 0 otherwise. A reader that closes its output
 early, as `head` does, ends the report but changes none of these.
 
@@ -235,7 +251,8 @@ or is nested deeper than 512 levels, reported where its reading stops, and a
 tree handed to `lintCatalogue` that holds more than a million messages — an
 object it holds in several places counted in each — reported on the last
 message read. What a file that is not JSON holds is unknown, so `curly-lint`
-compares no message under its namespace, in any locale: each is linted alone.
+compares no message under its namespace with another locale's: each is still
+linted with its locale, and an id defined twice is still reported.
 
 #### `duplicate-id`
 

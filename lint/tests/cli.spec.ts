@@ -6,11 +6,15 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { run } from '../src/run';
+import type { Problem } from '../src/run';
 
-// What the command asks of the file system, counted, and the names of the
-// directories it is refused, as a test cannot count on file permissions.
+// What the command asks of the file system, counted, and the ends of the
+// paths it is refused, written with `/`, as a test cannot count on file
+// permissions: the directories it cannot list, the files it cannot open, and
+// the paths it cannot reach, as below a directory it cannot search.
 const calls = vi.hoisted(() => ({ readdir: 0, realpath: 0, stat: 0 }));
 const refused = vi.hoisted(() => new Set<string>());
+const unreachable = vi.hoisted(() => new Set<string>());
 
 vi.mock('node:fs/promises', async (original) => {
   const fs = await original<typeof import('node:fs/promises')>();
@@ -19,9 +23,13 @@ vi.mock('node:fs/promises', async (original) => {
 
     return call(...args);
   }) as T;
-  const readdir = ((path: string, options: never) => (refused.has(path.split(/[\\/]/).at(-1) ?? '') ? Promise.reject(new Error(`EACCES: permission denied, scandir '${path}'`)) : fs.readdir(path, options))) as typeof fs.readdir;
+  const denied = (ends: Set<string>, path: unknown) => typeof path === 'string' && [...ends].some((end) => `/${path.split(/[\\/]/).join('/')}`.endsWith(`/${end}`));
+  const refusal = (call: string, path: string) => Promise.reject(Object.assign(new Error(`EACCES: permission denied, ${call} '${path}'`), { code: 'EACCES' }));
+  const readdir = ((path: string, options: never) => (denied(refused, path) ? refusal('scandir', path) : fs.readdir(path, options))) as typeof fs.readdir;
+  const readFile = ((path: string, options: never) => (denied(refused, path) ? refusal('open', path) : fs.readFile(path, options))) as typeof fs.readFile;
+  const stat = ((path: string, options: never) => (denied(unreachable, path) ? refusal('stat', path) : fs.stat(path, options))) as typeof fs.stat;
 
-  return { ...fs, readdir: counted('readdir', readdir), realpath: counted('realpath', fs.realpath), stat: counted('stat', fs.stat) };
+  return { ...fs, readdir: counted('readdir', readdir), readFile, realpath: counted('realpath', fs.realpath), stat: counted('stat', stat) };
 });
 
 let cwd: string;
@@ -32,6 +40,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   refused.clear();
+  unreachable.clear();
   await rm(cwd, { recursive: true, force: true });
 });
 
@@ -45,6 +54,10 @@ const files = async (tree: Record<string, string>) => {
 // A link to a directory, which Windows makes as a junction without the
 // privilege a symbolic link takes there.
 const link = (target: string, path: string) => symlink(join(cwd, target), join(cwd, path), 'junction');
+
+// What the command says where what a directory it cannot read holds leaves
+// every locale uncompared.
+const uncompared = /What a directory that cannot be read holds is unknown, so no locale is compared with another\.\n$/;
 
 const cli = async (...argv: string[]) => {
   let out = '';
@@ -311,6 +324,12 @@ describe('curly-lint', () => {
     ]);
   });
 
+  it('reports an id defined twice under the namespace of a file that is not JSON', async () => {
+    await files({ 'locales/en/common.json': '{"a.b": "x", "a": {"b": "y"}}', 'locales/cs/common.json': '{"a":' });
+
+    expect((await cli('locales/{locale}/{namespace}.json')).out).toContain('locales/en/common.json:1:25  error  `common.a.b` is defined again in `en`, so one of the two messages is never read.  duplicate-id');
+  });
+
   it('reads a file two arguments reach once', async () => {
     await files({ 'locales/en.json': '{"hi": "Hello"}' });
 
@@ -342,10 +361,13 @@ describe('curly-lint', () => {
 
   // Windows makes a symbolic link only with a privilege a test cannot count on.
   it.skipIf(process.platform === 'win32')('follows a linked directory once, and reports a file it cannot read', async () => {
-    await files({ 'locales/en/common.json': '{"hi": "Hello {{name}}"}', 'shared/cs/common.json': '{"hi": "Ahoj {{jmeno}}"}', 'locales/de/common.json': '{"hi": "Hallo {{name}"}' });
+    await files({ 'locales/en/common.json': '{"hi": "Hello {{name}}"}', 'shared/cs/common.json': '{"hi": "Ahoj {{jmeno}}"}', 'locales/de/common.json': '{"hi": "Hallo {{name}"}', 'shared/de/old.json': '{"x": "X"}' });
     await symlink(join(cwd, 'shared/cs'), join(cwd, 'locales/cs'));
     await symlink(join(cwd, 'locales'), join(cwd, 'locales/en/loop'));
-    await symlink(join(cwd, 'gone.json'), join(cwd, 'locales/de/old.json'));
+    // What the link leads to is there, and cannot be reached.
+    await symlink(join(cwd, 'shared/de/old.json'), join(cwd, 'locales/de/old.json'));
+    unreachable.add('locales/de/old.json');
+    refused.add('locales/de/old.json');
     await mkdir(join(cwd, 'public'));
     await link('locales', 'public/locales');
 
@@ -361,6 +383,24 @@ describe('curly-lint', () => {
     }
     expect(out).toContain('locales/cs/common.json:1:14  error  `jmeno` is read here');
     expect(out).toContain('locales/de/common.json:1:15  error  `{{` opens no placeholder');
+  });
+
+  // Windows makes a symbolic link only with a privilege a test cannot count on.
+  it.skipIf(process.platform === 'win32')('passes over a link to a path that is not there where it would read a file, as a file that is not there', async () => {
+    await files({
+      'locales/en/common.json': '{"hi": "Hi"}',
+      'locales/en/old.json': '{"x": "X"}',
+      'locales/cs/common.json': '{"hi": "Ahoj"}',
+      'notes.txt': 'x',
+    });
+    // Missing, below a file, and a loop of links.
+    await symlink(join(cwd, 'gone.json'), join(cwd, 'locales/cs/old.json'));
+    await symlink(join(cwd, 'notes.txt/x.json'), join(cwd, 'locales/cs/older.json'));
+    await symlink(join(cwd, 'locales/cs/oldest.json'), join(cwd, 'locales/cs/oldest.json'));
+
+    // `cs` lacks what `en` holds under `old`, as where no file stands there.
+    expect(await cli('locales/{locale}/{namespace}.json')).toEqual({ code: 0, out: 'locales/en/old.json:1:7  warning  `cs` has no message `old.x`.  missing-message\n\n1 problem (0 errors, 1 warning)\n', err: '' });
+    expect(await cli('locales/cs', '--locale', 'cs')).toEqual({ code: 0, out: '', err: '' });
   });
 
   it('reads a directory at its own path, wherever a link to it sorts', async () => {
@@ -527,6 +567,184 @@ describe('curly-lint', () => {
     await files({ 'locales/en/common.json': '{"hi": "{{"}', 'locales/private/x.json': '{}' });
 
     expect(await cli('locales/{locale}/{namespace}.json')).toMatchObject({ code: 1, err: '' });
+  });
+
+  it('reports a directory it cannot read, reads the rest of the argument, and compares no locale with another', async () => {
+    refused.add('cs/admin');
+    await files({
+      'locales/en/common.json': '{"hi": "Hi", "bye": "Bye", "a.b": "x", "a": {"b": "y"}}',
+      'locales/cs/common.json': '{"hi": "{{", "files": "{{n:plural; one:soubor; few:soubory; other:soubor\u016f;}}"}',
+      'locales/en/admin/users.json': '{"title": "Users"}',
+      'locales/cs/admin/users.json': '{"title": "Uzivatele"}',
+    });
+
+    const pattern = 'locales/{locale}/{namespace}.json';
+    const cannot = /^Cannot read locales\/cs\/admin: [^\n]*\n/;
+
+    // What `cs` holds under `admin` is unknown, so what it lacks or holds
+    // beside `en` is too. Each message is still linted with its locale, and
+    // each locale on its own.
+    expect(await cli(pattern)).toEqual({
+      code: 2,
+      out: [
+        'locales/cs/common.json:1:9  error  `{{` opens no placeholder: nothing closes it on its line, so it renders as text.  unclosed-placeholder',
+        'locales/cs/common.json:1:28  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and this selection has no `many` option, so those take the fallback chain.  missing-category',
+        'locales/en/common.json:1:51  error  `common.a.b` is defined again in `en`, so one of the two messages is never read.  duplicate-id',
+        '',
+        '3 problems (3 errors, 0 warnings)',
+        '',
+      ].join('\n'),
+      err: expect.stringMatching(new RegExp(`${cannot.source}${uncompared.source}`)) as unknown,
+    });
+
+    const json = await cli(pattern, '--format', 'json');
+
+    expect({ code: json.code, codes: (JSON.parse(json.out) as Problem[]).map(({ code }) => code) }).toEqual({ code: 2, codes: ['unclosed-placeholder', 'missing-category', 'duplicate-id'] });
+    expect(json.err).toMatch(cannot);
+
+    // Given as it is, its files would be read in no locale, and compared with nothing.
+    const plain = await cli('locales');
+
+    expect(plain).toMatchObject({ code: 2, out: expect.stringContaining('locales/cs/common.json:1:9  error') as unknown, err: expect.stringMatching(cannot) as unknown });
+    expect(plain.err).not.toMatch(uncompared);
+
+    // Named once, at the first argument's path to it, and compared by none
+    // where any argument would read its files in a locale.
+    const both = await cli('locales', pattern);
+
+    expect(both.err.match(/Cannot read/g)).toHaveLength(1);
+    expect(both).toMatchObject({ code: 2, out: expect.not.stringContaining('orphan-message') as unknown, err: expect.stringMatching(uncompared) as unknown });
+
+    // A base it cannot list, or cannot reach, is named, not a pattern that names no file.
+    for (const denied of [refused, unreachable]) {
+      denied.add('locales');
+      expect(await cli(pattern)).toEqual({ code: 2, out: '', err: expect.stringMatching(new RegExp(`^Cannot read locales: [^\\n]*\\n${uncompared.source}`)) as unknown });
+      denied.delete('locales');
+    }
+  });
+
+  it('compares nothing a locale it cannot read could change, and still lints each message', async () => {
+    refused.add('locales/cs');
+    await files({
+      'locales/en/common.json': '{"hi": "Hi {{name}}", "bye": "Bye"}',
+      'locales/de/common.json': '{"hi": "{{"}',
+      'locales/cs/common.json': '{"hi": "Ahoj"}',
+    });
+
+    const pattern = 'locales/{locale}/{namespace}.json';
+    const found = {
+      code: 2,
+      out: 'locales/de/common.json:1:9  error  `{{` opens no placeholder: nothing closes it on its line, so it renders as text.  unclosed-placeholder\n\n1 problem (1 error, 0 warnings)\n',
+      err: expect.stringMatching(new RegExp(`^Cannot read locales/cs: [^\\n]*\\n${uncompared.source}`)) as unknown,
+    };
+
+    expect(await cli(pattern)).toEqual(found);
+    // Any locale could be what it cannot read, the source named included.
+    for (const source of ['cs', 'pl']) expect(await cli(pattern, '--source', source)).toEqual(found);
+  });
+
+  it('compares every locale where a directory it cannot read would hold files of none', async () => {
+    refused.add('extra/admin');
+    await files({
+      'locales/en/common.json': '{"hi": "Hi", "bye": "Bye"}',
+      'locales/cs/common.json': '{"hi": "Ahoj"}',
+      'locales/en/admin/users.json': '{"title": "Users", "x": "X"}',
+      'locales/cs/admin/users.json': '{"title": "Uzivatele"}',
+      'extra/admin/x.json': '{"x": "X"}',
+    });
+
+    const pattern = 'locales/{locale}/{namespace}.json';
+    const cannot = /^Cannot read extra\/admin: [^\n]*\n/;
+
+    for (const extra of ['extra/{namespace}.json', 'extra']) {
+      // Its files would have no locale, so they are compared with nothing.
+      expect(await cli(pattern, extra)).toEqual({
+        code: 2,
+        out: [
+          'locales/en/admin/users.json:1:25  warning  `cs` has no message `admin.users.x`.  missing-message',
+          'locales/en/common.json:1:21  warning  `cs` has no message `common.bye`.  missing-message',
+          '',
+          '2 problems (0 errors, 2 warnings)',
+          '',
+        ].join('\n'),
+        err: expect.stringMatching(new RegExp(`${cannot.source}$`)) as unknown,
+      });
+      expect(await cli(pattern, extra, '--source', 'pl')).toEqual({ code: 2, out: '', err: expect.stringMatching(new RegExp(`${cannot.source}No file given is written for the source locale \`pl\`\\.\\n$`)) as unknown });
+      // With --locale, they would be in that locale.
+      expect(await cli('--locale', 'cs', '--source', 'pl', pattern, extra)).toEqual({ code: 2, out: '', err: expect.stringMatching(new RegExp(`${cannot.source}${uncompared.source}`)) as unknown });
+    }
+  });
+
+  it('reads a base it cannot reach, or a path given as it is that is no link, as a directory it cannot read', async () => {
+    await files({
+      'public/en/common.json': '{"hi": "Hi", "bye": "Bye"}',
+      'public/cs/common.json': '{"hi": "Ahoj"}',
+      'app/locales/cs/common.json': '{"bye": "Nashle"}',
+      'notes.txt': 'x',
+    });
+
+    const pattern = 'public/{locale}/{namespace}.json';
+    const cannot = /^Cannot read app\/locales: [^\n]*\n/;
+    const missing = 'public/en/common.json:1:21  warning  `cs` has no message `common.bye`.  missing-message\n\n1 problem (0 errors, 1 warning)\n';
+
+    unreachable.add('app/locales');
+    expect(await cli(pattern, 'app/locales/{locale}/{namespace}.json', '--source', 'pl')).toEqual({ code: 2, out: '', err: expect.stringMatching(new RegExp(`${cannot.source}${uncompared.source}`)) as unknown });
+    expect(await cli(pattern, 'app/locales')).toEqual({ code: 2, out: missing, err: expect.stringMatching(new RegExp(`${cannot.source}$`)) as unknown });
+    expect(await cli(pattern, 'app/locales', '--locale', 'de')).toEqual({ code: 2, out: '', err: expect.stringMatching(new RegExp(`${cannot.source}${uncompared.source}`)) as unknown });
+
+    // A path that is not there, or stands below a file, is named as given,
+    // and the rest is compared.
+    for (const absent of ['gone/{locale}/{namespace}.json', 'notes.txt/locales/{locale}/{namespace}.json', 'gone', 'notes.txt/x']) {
+      const named = `Cannot read ${absent}: `;
+
+      expect(await cli(pattern, absent)).toEqual({ code: 2, out: missing, err: expect.stringMatching(new RegExp(`^${named.replace(/[.{}]/g, '\\$&')}[^\\n]*\\n$`)) as unknown });
+      expect(await cli(pattern, absent, '--source', 'pl')).toMatchObject({ code: 2, err: expect.stringContaining('No file given is written for the source locale `pl`.') as unknown });
+    }
+  });
+
+  // Windows makes a symbolic link only with a privilege a test cannot count on.
+  it.skipIf(process.platform === 'win32')('reads a link it cannot follow as a directory it cannot read, unless it reads a file there', async () => {
+    await files({
+      'locales/en/common.json': '{"hi": "Hi", "bye": "Bye"}',
+      'locales/de/common.json': '{"hi": "Hallo"}',
+      'shared/cs/common.json': '{"hi": "Ahoj"}',
+      'shared/pl/common.json': '{"hi": "Czesc"}',
+      'notes.txt': 'x',
+    });
+    await mkdir(join(cwd, 'locales/pl'));
+    await symlink(join(cwd, 'shared/cs'), join(cwd, 'locales/cs'));
+    await symlink(join(cwd, 'shared/pl/common.json'), join(cwd, 'locales/pl/common.json'));
+
+    const pattern = 'locales/{locale}/{namespace}.json';
+    const found = {
+      code: 2,
+      out: '',
+      err: expect.stringMatching(new RegExp(`^Cannot read locales/cs: [^\\n]*\\n${uncompared.source}`)) as unknown,
+    };
+
+    unreachable.add('locales/cs');
+    expect(await cli(pattern)).toEqual(found);
+    expect(await cli(pattern, '--source', 'cs')).toEqual(found);
+    unreachable.clear();
+
+    // One the pattern reads as a file is a file, and a link to nothing there
+    // is passed over, as nothing stands below it.
+    unreachable.add('locales/pl/common.json');
+    await symlink(join(cwd, 'gone'), join(cwd, 'locales/fr'));
+    await symlink(join(cwd, 'notes.txt/x'), join(cwd, 'locales/it'));
+    await symlink(join(cwd, 'locales/sk'), join(cwd, 'locales/sk'));
+    expect(await cli(pattern)).toEqual({
+      code: 0,
+      out: [
+        'locales/en/common.json:1:21  warning  `cs` has no message `common.bye`.  missing-message',
+        'locales/en/common.json:1:21  warning  `de` has no message `common.bye`.  missing-message',
+        'locales/en/common.json:1:21  warning  `pl` has no message `common.bye`.  missing-message',
+        '',
+        '3 problems (0 errors, 3 warnings)',
+        '',
+      ].join('\n'),
+      err: '',
+    });
   });
 
   it('reads a file a pattern reads as the pattern does, whatever path a directory given as it is reaches it at', async () => {

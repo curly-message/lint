@@ -137,6 +137,27 @@ const reported = () => {
   };
 };
 
+// The command over a catalogue of 5 000 messages in each of two locales,
+// beside a file of a third locale that is not JSON. What that file holds is
+// unknown, so no message under its namespace, which holds every one, is
+// compared.
+const uncompared = () => {
+  const root = mkdtempSync(join(tmpdir(), 'curly-lint-bench-'));
+  const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+
+  process.once('exit', () => rmSync(root, { recursive: true, force: true }));
+  for (const [locale, tree] of Object.entries({ ...catalogue(5000), de: undefined })) {
+    mkdirSync(join(root, locale));
+    writeFileSync(join(root, locale, 'common.json'), tree ? JSON.stringify(tree) : '{"hi":');
+  }
+
+  return () => {
+    const { status, stderr } = spawnSync(process.execPath, [cli, '{locale}/{namespace}.json'], { cwd: root, encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
+
+    if (status !== 1) throw new Error(`the command exited ${status}: ${stderr}`);
+  };
+};
+
 export default [
   { name: 'dist/*.js', kind: 'size', run: () => bundle().length },
   { name: 'dist/*.js, gzipped', kind: 'size', run: () => gzipSync(bundle(), { level: 9 }).length },
@@ -144,6 +165,7 @@ export default [
   { name: 'curly-lint: file system calls, a pattern over a tree with links', kind: 'count', run: () => walked('locales/{locale}/{namespace}.json') },
   { name: 'curly-lint: file system calls, a directory given as it is, over the same tree', kind: 'count', run: () => walked('.') },
   { name: 'curly-lint: a report of 20 000 findings, written to a regular file', kind: 'time', run: reported },
+  { name: 'curly-lint: 5 000 messages in two locales, beside a file of a third that is not JSON', kind: 'time', run: uncompared },
   { name: 'lintMessage: five catalogue messages, with their locale', kind: 'time', run: () => () => {
     for (const [, message] of MESSAGES) lintMessage(message, { locale: 'cs' });
   } },
