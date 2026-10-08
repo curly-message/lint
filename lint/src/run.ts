@@ -1,5 +1,5 @@
-import { readdir, readFile, realpath, stat } from 'node:fs/promises';
-import { join, relative, resolve, sep } from 'node:path';
+import { lstat, readdir, readFile, realpath, stat } from 'node:fs/promises';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { parseArgs } from 'node:util';
 import { lintEntries } from './catalogue';
 import type { Entry } from './catalogue';
@@ -80,8 +80,13 @@ type Found = { path: string, real: string, placed: Placed, links: number };
 // holds it, nor to the directory searched or one holding it. Each path reads
 // its base afresh, as which links it follows turns on the base.
 const catalogues = async (path: string, pattern: Pattern | undefined): Promise<Found[]> => {
+  const found = await stat(path).catch(async (error: unknown) => {
+    // A link that cannot be followed is a file that cannot be read, as below a directory.
+    if (pattern || !(await lstat(path).catch(() => undefined))?.isSymbolicLink()) throw error;
+  });
+
   // A file given as it is need stand nowhere, as a pipe does not.
-  if (!(await stat(path)).isDirectory()) return pattern ? [] : [{ path, real: await realpath(path).catch(() => path), placed: PLAIN.start.placed, links: 0 }];
+  if (!found?.isDirectory()) return pattern ? [] : [{ path, real: await realpath(path).catch(() => realpath(dirname(path)).then((at) => join(at, basename(path)), () => path)), placed: PLAIN.start.placed, links: 0 }];
 
   const real = await realpath(path);
   const reader = pattern ?? PLAIN;
