@@ -123,8 +123,8 @@ const namesOf = (tree: Tree): Names => {
   return names;
 };
 
-/** A message a locale is compared by, and its names. */
-type Read = { entry: number, names: Names };
+/** A message a locale is compared by, and its names, read where it is compared. */
+type Read = { entry: number, names?: Names };
 
 // The numbers the options of selections give text of their own. A number key
 // of `plural` selects for the number it reads as (section 11.5), and a key of
@@ -136,11 +136,12 @@ const numbersOf = (placeholders: Placeholder[], spelled: boolean) => placeholder
 }));
 
 /**
- * Lints a list of messages as one catalogue: each message, each with its
- * locale, then every locale against the source one. A finding names its
- * message by `entry`, the index of the message in `entries`.
+ * Lints a list of messages as `lintEntries` does, comparing with the source
+ * locale only the messages whose ids `comparing` takes, and none where it is
+ * `false`. Each message is still linted with its locale, and each locale on
+ * its own.
  */
-export const lintEntries = (entries: readonly Entry[], options: EntriesOptions = {}): CatalogueFinding[] => {
+export const lintEntriesComparing = (entries: readonly Entry[], options: EntriesOptions, comparing: ((id: string) => boolean) | false): CatalogueFinding[] => {
   const hosted = options.modifiers ?? [];
   const modifiers = { defined: definedBy(options.intl), hosted };
   const findings: CatalogueFinding[] = [];
@@ -162,23 +163,25 @@ export const lintEntries = (entries: readonly Entry[], options: EntriesOptions =
     if (messages.has(id)) {
       make(entry, 'duplicate-id', undefined, `${quoted(id)} is defined again in ${quoted(locale)}, so one of the two messages is never read.`);
     } else {
-      messages.set(id, { entry, names: namesOf(tree) });
+      messages.set(id, { entry, names: comparing && comparing(id) ? namesOf(tree) : undefined });
     }
   });
 
   const source = options.source ?? (locales.has('en') ? 'en' : [...locales.keys()][0]);
   const reference = locales.get(source);
 
-  if (!reference) return findings;
+  if (!comparing || !reference) return findings;
 
   for (const [locale, messages] of locales) {
     if (locale === source) continue;
 
-    for (const [id, { entry }] of reference) {
-      if (!messages.has(id)) make(entry, 'missing-message', undefined, `${quoted(locale)} has no message ${quoted(id)}.`);
+    for (const [id, { entry, names }] of reference) {
+      if (names && !messages.has(id)) make(entry, 'missing-message', undefined, `${quoted(locale)} has no message ${quoted(id)}.`);
     }
 
     for (const [id, { entry, names }] of messages) {
+      if (!names) continue;
+
       const compared = reference.get(id);
 
       if (!compared) {
@@ -186,12 +189,19 @@ export const lintEntries = (entries: readonly Entry[], options: EntriesOptions =
         continue;
       }
 
-      compare(source, compared.names, entry, names, modifiers, make);
+      if (compared.names) compare(source, compared.names, entry, names, modifiers, make);
     }
   }
 
   return findings.sort(order);
 };
+
+/**
+ * Lints a list of messages as one catalogue: each message, each with its
+ * locale, then every locale against the source one. A finding names its
+ * message by `entry`, the index of the message in `entries`.
+ */
+export const lintEntries = (entries: readonly Entry[], options: EntriesOptions = {}): CatalogueFinding[] => lintEntriesComparing(entries, options, () => true);
 
 const order = (a: CatalogueFinding, b: CatalogueFinding) => a.entry - b.entry || a.start - b.start;
 

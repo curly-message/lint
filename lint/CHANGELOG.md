@@ -27,6 +27,10 @@ Format, as a library and as the `curly-lint` command.
   not JSON is an `unreadable-catalogue` error, and nothing under its namespace
   is compared. A reader that closes the output early, as `head` does, ends the
   report, not the run: the command exits as the lint decided. Output that
-  cannot be written, as on a full disk, is said on stderr and exits 2.
+  cannot be written, as on a full disk, is said on stderr and exits 2. A file
+  or a directory it cannot read is named on stderr and the rest is still read
+  and linted, the command exiting 2. What a directory it cannot read holds is
+  unknown: where its files would be read in a locale, no locale is compared
+  with another in that run, and each message is still linted with its locale.
 * **The library** exports `lintMessage`, `lintCatalogue`, `lintEntries`,
   `entriesOf`, `flatten`, `readCatalogue` and the `RULES` table.
