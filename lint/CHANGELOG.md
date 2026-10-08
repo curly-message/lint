@@ -27,4 +27,4 @@ Format, as a library and as the `curly-lint` command.
   not JSON is an `unreadable-catalogue` error, and nothing under its namespace
   is compared.
 * **The library** exports `lintMessage`, `lintCatalogue`, `lintEntries`,
-  `readCatalogue` and the `RULES` table.
+  `entriesOf`, `flatten`, `readCatalogue` and the `RULES` table.
