@@ -31,8 +31,9 @@ Options:
   --help              Print this and exit.
 
 Exits 1 where an error is found, a file that is not JSON included, 2 where
-the arguments are wrong, a path cannot be read or a pattern names no file,
-and 0 otherwise.`;
+the arguments are wrong, a path cannot be read, a pattern names no file or
+the output cannot be written, and 0 otherwise. A reader that closes the
+output early, as head does, ends the report but changes none of these.`;
 
 export type Io = {
   cwd: string,

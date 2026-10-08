@@ -1,6 +1,6 @@
 // The rows `../bench/harness.mjs` measures, each on the build in `dist/`.
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { closeSync, fstatSync, mkdirSync, mkdtempSync, openSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -109,12 +109,41 @@ const walked = (...argv) => {
   }
 };
 
+// The command writing a report of 20 000 findings to a regular file, as a CI
+// job that keeps it does: a catalogue of 20 000 messages, each opening a
+// placeholder nothing closes.
+const reported = () => {
+  const root = mkdtempSync(join(tmpdir(), 'curly-lint-bench-'));
+  const cli = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+  let size;
+
+  process.once('exit', () => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, 'en.json'), JSON.stringify(Object.fromEntries(Array.from({ length: 20000 }, (_, index) => [`m${index}`, '{{']))));
+
+  return () => {
+    const fd = openSync(join(root, 'report.txt'), 'w');
+
+    try {
+      const { status, stderr } = spawnSync(process.execPath, [cli, 'en.json'], { cwd: root, encoding: 'utf8', stdio: ['ignore', fd, 'pipe'] });
+      const written = fstatSync(fd).size;
+
+      if (status !== 1) throw new Error(`the command exited ${status}: ${stderr}`);
+      if (written < 20000 || (size ?? written) !== written) throw new Error(`the command wrote ${written} bytes`);
+
+      size = written;
+    } finally {
+      closeSync(fd);
+    }
+  };
+};
+
 export default [
   { name: 'dist/*.js', kind: 'size', run: () => bundle().length },
   { name: 'dist/*.js, gzipped', kind: 'size', run: () => gzipSync(bundle(), { level: 9 }).length },
   { name: 'catalogue reads: linting 1 000 messages in two locales', kind: 'count', run: reads },
   { name: 'curly-lint: file system calls, a pattern over a tree with links', kind: 'count', run: () => walked('locales/{locale}/{namespace}.json') },
   { name: 'curly-lint: file system calls, a directory given as it is, over the same tree', kind: 'count', run: () => walked('.') },
+  { name: 'curly-lint: a report of 20 000 findings, written to a regular file', kind: 'time', run: reported },
   { name: 'lintMessage: five catalogue messages, with their locale', kind: 'time', run: () => () => {
     for (const [, message] of MESSAGES) lintMessage(message, { locale: 'cs' });
   } },

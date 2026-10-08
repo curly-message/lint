@@ -1,5 +1,6 @@
-import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { spawn, spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, open, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -576,6 +577,7 @@ describe('curly-lint', () => {
 // what the build made of it.
 describe('the built command', () => {
   const bin = fileURLToPath(new URL('../dist/cli.js', import.meta.url));
+  const runtime = 'Deno' in globalThis ? ['run', '-A', bin] : [bin];
 
   it('runs as the bin, and exits as the source does', async () => {
     await files({ 'en.json': '{"a": "{{v"}' });
@@ -595,5 +597,77 @@ describe('the built command', () => {
 
     expect(status).toBe(1);
     expect(stdout).toContain('dev/stdin:1:8  error');
+  });
+
+  // A report far larger than any pipe's buffer, to a reader gone before it
+  // reads any. The catalogue holds warnings alone, so the run exits 0,
+  // whichever stream is closed.
+  it('exits as the lint decided where its reader is gone, and prints no trace', async () => {
+    await files({ 'en.json': JSON.stringify(Object.fromEntries(Array.from({ length: 300 }, (_, i) => [`m${i}`, '\\b'.repeat(100)]))) });
+
+    const { code, err } = await cli('en.json');
+    const closed = (stderr: boolean) => new Promise<{ status: number | null, stderr: string }>((resolve) => {
+      const child = spawn(process.execPath, [...runtime, 'en.json'], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+      let text = '';
+
+      child.stdout.destroy();
+
+      if (stderr) child.stderr.destroy();
+      else child.stderr.setEncoding('utf8').on('data', (chunk: string) => { text += chunk; });
+
+      child.on('close', (status) => resolve({ status, stderr: text }));
+    });
+
+    expect(code).toBe(0);
+    expect(err).not.toBe('');
+    expect(await closed(false)).toEqual({ status: 0, stderr: err });
+    expect(await closed(true)).toEqual({ status: 0, stderr: '' });
+  });
+
+  // A device that takes nothing, as a full disk does. Only Linux has one.
+  it.skipIf(!existsSync('/dev/full'))('says where its output cannot be written, and exits 2', async () => {
+    await files({ 'en.json': '{"a": "\\\\b"}' });
+
+    const full = await open('/dev/full', 'w');
+    const report = await cli('--locale', 'en', 'en.json');
+    const lost = spawnSync(process.execPath, [...runtime, '--locale', 'en', 'en.json'], { cwd, encoding: 'utf8', stdio: ['ignore', full.fd, 'pipe'] });
+    const noted = await cli('en.json');
+    const unsaid = spawnSync(process.execPath, [...runtime, 'en.json'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', full.fd] });
+
+    await full.close();
+
+    expect(report).toMatchObject({ code: 0, out: expect.stringContaining('inert-escape') as unknown, err: '' });
+    expect(lost.status).toBe(2);
+    expect(lost.stderr).toMatch(/^Cannot write the report: [^\n]+\n$/);
+    expect(noted.err).not.toBe('');
+    expect({ status: unsaid.status, stdout: unsaid.stdout }).toEqual({ status: 2, stdout: noted.out });
+  });
+
+  // A regular file, as a shell's `>` makes one, and one open for reading
+  // alone, which takes no write at all. Deno's standard output, as Rust's
+  // does, reports a write to a descriptor that cannot take one as taken whole.
+  it('writes its report to a regular file, and says where the file cannot be written', async () => {
+    await files({ 'en.json': '{"a": "\\\\b"}' });
+
+    const path = join(cwd, 'report.txt');
+    const report = await cli('--locale', 'en', 'en.json');
+    const lint = async (flags: 'w' | 'r') => {
+      const file = await open(path, flags);
+      const { status, stderr } = spawnSync(process.execPath, [...runtime, '--locale', 'en', 'en.json'], { cwd, encoding: 'utf8', stdio: ['ignore', file.fd, 'pipe'] });
+
+      await file.close();
+
+      return { status, stderr, file: await readFile(path, 'utf8') };
+    };
+
+    expect(report).toMatchObject({ code: 0, out: expect.stringContaining('inert-escape') as unknown, err: '' });
+    expect(await lint('w')).toEqual({ status: 0, stderr: '', file: report.out });
+
+    if ('Deno' in globalThis) return;
+
+    const lost = await lint('r');
+
+    expect(lost).toMatchObject({ status: 2, file: report.out });
+    expect(lost.stderr).toMatch(/^Cannot write the report: [^\n]+\n$/);
   });
 });
