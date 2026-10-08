@@ -1,3 +1,5 @@
+import { localeKey } from './tag';
+
 /** The plural categories of the Unicode CLDR, which section 11.5 keys by. */
 export const CATEGORIES = ['zero', 'one', 'two', 'few', 'many', 'other'] as const;
 
@@ -57,11 +59,11 @@ const known = new Map<string, Categories | undefined>();
  * writes it, for `-`.
  */
 export const categoriesOf = (locale: string, type: RuleType): Categories | undefined => {
-  const cached = `${type} ${locale}`;
+  const tag = localeKey(locale);
+  const cached = `${type} ${tag}`;
 
   if (known.has(cached)) return known.get(cached);
 
-  const tag = locale.replace(/_/g, '-');
   let answer: Categories | undefined;
 
   if (supported(tag)) {

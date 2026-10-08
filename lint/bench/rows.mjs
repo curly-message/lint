@@ -9,6 +9,24 @@ import { lintCatalogue, lintMessage, readCatalogue } from '../dist/index.js';
 
 const bundle = () => Buffer.concat(readdirSync(new URL('../dist/', import.meta.url)).filter((name) => name.endsWith('.js')).sort().map((name) => readFileSync(new URL(`../dist/${name}`, import.meta.url))));
 
+// What `import '@curly-message/lint'` loads: the library's entry and the
+// chunks it imports, and those they import, each once.
+const library = () => {
+  const loaded = new Map();
+  const load = (name) => {
+    if (loaded.has(name)) return;
+
+    const text = readFileSync(new URL(`../dist/${name}`, import.meta.url));
+
+    loaded.set(name, text);
+    for (const [, imported] of text.toString('utf8').matchAll(/(?:from|import)\s*["']\.\/([^"']+)["']/g)) load(imported);
+  };
+
+  load('index.js');
+
+  return Buffer.concat([...loaded.values()]);
+};
+
 // Messages as a catalogue holds them, each in English and in Czech, whose
 // plural rules take four categories.
 const MESSAGES = [
@@ -161,6 +179,7 @@ const uncompared = () => {
 export default [
   { name: 'dist/*.js', kind: 'size', run: () => bundle().length },
   { name: 'dist/*.js, gzipped', kind: 'size', run: () => gzipSync(bundle(), { level: 9 }).length },
+  { name: 'dist/index.js and the chunks it imports', kind: 'size', run: () => library().length },
   { name: 'catalogue reads: linting 1 000 messages in two locales', kind: 'count', run: reads },
   { name: 'curly-lint: file system calls, a pattern over a tree with links', kind: 'count', run: () => walked('locales/{locale}/{namespace}.json') },
   { name: 'curly-lint: file system calls, a directory given as it is, over the same tree', kind: 'count', run: () => walked('.') },
