@@ -359,6 +359,76 @@ describe('curly-lint', () => {
     expect(await cli('en.json', '--source', 'fr')).toMatchObject({ code: 2, err: expect.stringContaining('`fr`') as unknown });
   });
 
+  it('finds the source locale written in any case, with `-` or `_`', async () => {
+    await files({ 'locales/en-us/common.json': '{"hi": "Hi", "bye": "Bye"}', 'locales/cs/common.json': '{"hi": "Ahoj"}' });
+
+    for (const source of ['en-US', 'en_US']) {
+      expect(await cli('locales/{locale}/{namespace}.json', '--source', source)).toEqual({
+        code: 0,
+        out: 'locales/en-us/common.json:1:21  warning  `cs` has no message `common.bye`.  missing-message\n\n1 problem (0 errors, 1 warning)\n',
+        err: '',
+      });
+    }
+  });
+
+  it('reports a locale two paths write two ways, and reads it as one', async () => {
+    await files({ 'a/en-us.json': '{"hi": "Hi"}', 'b/en-US.json': '{"bye": "Bye"}' });
+
+    expect(await cli('a/{locale}.json', 'b/{locale}.json')).toEqual({
+      code: 0,
+      out: 'b/en-US.json:1:9  warning  `en-US` is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.  duplicate-locale\n\n1 problem (0 errors, 1 warning)\n',
+      err: '',
+    });
+
+    // A spelling under which no message is read is reported on the first
+    // message of its locale: one whose only file holds none, is not JSON or
+    // cannot be read.
+    const reported = 'a/en-us.json:1:8  warning  `en-US`, under which no message was read, is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.  duplicate-locale';
+
+    await writeFile(join(cwd, 'b/en-US.json'), '{}');
+    expect(await cli('a/{locale}.json', 'b/{locale}.json')).toEqual({ code: 0, out: `${reported}\n\n1 problem (0 errors, 1 warning)\n`, err: '' });
+    await writeFile(join(cwd, 'b/en-US.json'), '{"bye":');
+    expect(await cli('a/{locale}.json', 'b/{locale}.json')).toEqual({
+      code: 1,
+      out: `${reported}\nb/en-US.json:1:8  error  Expected a value, found the end of the file.  unreadable-catalogue\n\n2 problems (1 error, 1 warning)\n`,
+      err: '',
+    });
+    refused.add('b/en-US.json');
+    expect(await cli('a/{locale}.json', 'b/{locale}.json')).toEqual({ code: 2, out: `${reported}\n\n1 problem (0 errors, 1 warning)\n`, err: expect.stringMatching(/^Cannot read b\/en-US\.json: [^\n]*\n$/) as unknown });
+  });
+
+  it('compares with a source locale whose files hold no message', async () => {
+    await files({ 'locales/en/common.json': '{}', 'locales/cs/common.json': '{"hi": "Ahoj"}' });
+
+    expect(await cli('locales/{locale}/{namespace}.json')).toEqual({
+      code: 0,
+      out: 'locales/cs/common.json:1:8  warning  `en` has no message `common.hi`, so nothing this message renders is compared with it.  orphan-message\n\n1 problem (0 errors, 1 warning)\n',
+      err: '',
+    });
+  });
+
+  it('compares what a file that is not JSON leaves known, in the source locale too', async () => {
+    await files({
+      'a/en/common.json': '{"hi": "Hi"}',
+      'a/cs/common.json': '{"hi":',
+      'a/cs/other.json': '{"x": "X"}',
+      'b/en/common.json': '{"hi":',
+      'b/cs/common.json': '{"hi": "Ahoj"}',
+      'b/cs/other.json': '{"x": "X"}',
+    });
+
+    const found = async (...argv: string[]) => {
+      const { code, out, err } = await cli(...argv, '--format', 'json');
+
+      return { code, problems: (JSON.parse(out) as Problem[]).map((problem) => `${problem.file} ${problem.code}`), err };
+    };
+
+    // Another locale's file is not JSON.
+    expect(await found('a/{locale}/{namespace}.json')).toEqual({ code: 1, problems: ['a/cs/common.json unreadable-catalogue', 'a/cs/other.json orphan-message'], err: '' });
+    // The source locale's only file is not JSON.
+    expect(await found('b/{locale}/{namespace}.json')).toEqual({ code: 1, problems: ['b/cs/other.json orphan-message', 'b/en/common.json unreadable-catalogue'], err: '' });
+  });
+
   // Windows makes a symbolic link only with a privilege a test cannot count on.
   it.skipIf(process.platform === 'win32')('follows a linked directory once, and reports a file it cannot read', async () => {
     await files({ 'locales/en/common.json': '{"hi": "Hello {{name}}"}', 'shared/cs/common.json': '{"hi": "Ahoj {{jmeno}}"}', 'locales/de/common.json': '{"hi": "Hallo {{name}"}', 'shared/de/old.json': '{"x": "X"}' });
@@ -526,6 +596,13 @@ describe('curly-lint', () => {
     await link('locales/pt_BR', 'locales/pt-BR/legacy');
 
     expect(await cli('locales/{locale}/{namespace}.json')).toEqual({ code: 0, out: '', err: '' });
+  });
+
+  it('reads a file once for a locale its paths write in two cases', async () => {
+    await files({ 'locales/en-US/common.json': '{"hi": "Hi"}', 'locales/cs/common.json': '{"hi": "Ahoj"}' });
+    await link('locales/en-US', 'locales/en_us');
+
+    expect(await cli('locales/{locale}/{namespace}.json', '--source', 'EN-us')).toEqual({ code: 0, out: '', err: '' });
   });
 
   it('reads a catalogue two patterns reach once, by the first of them', async () => {

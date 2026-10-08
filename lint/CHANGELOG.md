@@ -15,10 +15,12 @@ Format, as a library and as the `curly-lint` command.
   one it answers that the selection has no option for, a warning where number
   keys cover every count in it.
 * **Rules a catalogue decides**: a catalogue that cannot be read in full, an
-  id defined twice, a message one locale has and another lacks, a message
-  reading other parameters or showing one with another modifier than the
-  source locale's, and a number key the source locale's selection has and
-  another's lacks.
+  id defined twice, a locale written two ways, a source locale that is no
+  locale of the catalogue, a message one locale has and another lacks, a
+  message reading other parameters or showing one with another modifier than
+  the source locale's, and a number key the source locale's selection has and
+  another's lacks. Locale tags are told apart without regard to case, with `_` read as
+  `-`, in the library and in `curly-lint`'s `--source`.
 * **`curly-lint`** reads the JSON catalogues a pattern such as
   `"locales/{locale}/{namespace}.json"` names, takes each file's locale and
   namespace where the pattern places them, and guesses neither: it says how

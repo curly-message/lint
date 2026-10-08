@@ -36,9 +36,11 @@ lint another app's catalogue in a run of its own.
 - `{locale}` stands for a locale tag within one name of the path, with text
   around it where the pattern writes some, as in
   `"i18n/messages.{locale}.json"`. A tag is one whose language has two or three
-  letters, such as `cs`, `en-US` or `pt_BR`, read as `pt-BR`. A file whose path
-  holds no tag there, such as `locales/glossary.json`, is not one the pattern
-  names.
+  letters, such as `cs`, `en-US` or `pt_BR`, read as `pt-BR`. Tags are told
+  apart without regard to case, as BCP 47 reads them, so `locales/en-us/` and
+  `--source en-US` name one locale; an alias, such as `iw` for `he`, is
+  another tag. A file whose path holds no tag there, such as
+  `locales/glossary.json`, is not one the pattern names.
 - `{namespace}` stands for one name or more, joined with dots:
   `"locales/{namespace}/{locale}.json"` reads `locales/admin/users/cs.json` as
   Czech messages under `admin.users`. Where a pattern has none, a file's ids sit
@@ -57,8 +59,9 @@ lint another app's catalogue in a run of its own.
   under the namespace that path places: the first pattern's path to it, of
   those the one through the fewest links, and of those the first in the order
   of paths. A link `locales/pt` to `locales/pt-BR` reads a file as `pt` and as
-  `pt-BR`; a link `locales/en/app.json` to `common.json` beside it reads that
-  file under `common` alone.
+  `pt-BR`, and a link `locales/en_us` to `locales/en-US` reads it once; a link
+  `locales/en/app.json` to `common.json` beside it reads that file under
+  `common` alone.
 
 Quote a pattern, as PowerShell and some shells read its braces otherwise. In a
 `package.json` script, escape the quotes:
@@ -84,7 +87,7 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 | Option | Meaning |
 | --- | --- |
 | `--locale <tag>` | The locale of every file whose path holds none. |
-| `--source <tag>` | The locale the others are compared with: `en` where the catalogue holds it, and otherwise the first locale found, reading the arguments in their order and the files of each in the order of their paths. |
+| `--source <tag>` | The locale the others are compared with, written in any case, with `-` or `_`: `en` where the catalogue holds it, and otherwise the first locale found, reading the arguments in their order and the files of each in the order of their paths. |
 | `--modifier <name>` | A modifier the host registers. Repeat it for each. |
 | `--no-intl` | The host satisfies Core alone, not Intl: the six modifiers Intl defines are unknown unless `--modifier` names them. |
 | `--format <format>` | `text`, the default, or `json`. |
@@ -135,8 +138,8 @@ lintCatalogue({
 | Export | What it does |
 | --- | --- |
 | `lintMessage(message, options?)` | Lints one message. `options.locale` adds the rules a locale decides, written with `-` or `_`; `options.modifiers` names the modifiers a host registers; `options.intl: false` is a host that satisfies Core alone. |
-| `lintCatalogue(catalogue, options?)` | Lints a tree of messages for each locale: each message with its locale, then every locale against the source one. `options.source` names it. |
-| `lintEntries(entries, options?)` | The same over a list of `{ locale, id, message }`. A finding's `entry` is the index of its message in the list. `options.locales` names the locales the catalogue is written for, so one with no message yet lacks every message of the source locale. |
+| `lintCatalogue(catalogue, options?)` | Lints a tree of messages for each locale: each message with its locale, then every locale against the source one. `options.source` names it. Two tags that differ only in case, or in `_` for `-`, are one locale, and a finding names each locale as the catalogue writes it. A source that is no locale of the catalogue is a [`missing-source`](#missing-source) error. |
+| `lintEntries(entries, options?)` | The same over a list of `{ locale, id, message }`, its locales matched the same way. A finding's `entry` is the index of its message in the list. `options.locales` names the locales the catalogue is written for, so one with no message yet lacks every message of the source locale. |
 | `entriesOf(catalogue)`, `flatten(tree)` | The messages a catalogue or a tree holds, in order, each string leaf by its path joined with dots, up to a million for each tree. Only an object's own enumerable data members are read, so no accessor runs, and an object a tree holds inside itself is read where it is first reached. |
 | `readCatalogue(text)` | Reads a JSON catalogue as `JSON.parse` does, past a byte order mark and up to 512 levels deep, and says where each string stands in the text, past its escape sequences, and which members a later one of the same name replaced. |
 | `RULES` | Every rule: its code, severity, scope and the section of the specification it rests on. |
@@ -260,8 +263,33 @@ linted with its locale, and an id defined twice is still reported.
 #### `duplicate-id`
 
 Error. An id defined twice in one locale — a member a later one of the same
-name replaces, or a dotted key and a nested one that join to one id — so one
-of the two messages is never read.
+name replaces, a dotted key and a nested one that join to one id, or one under
+two spellings of one locale with different text — so one of the two messages
+is never read.
+
+#### `duplicate-locale`
+
+Warning. A locale written two ways, its tags differing only in case or in `_`
+for `-`: `en-us` and `en-US`. The linter reads the two as one locale, and
+reports each spelling after the first once, at its first message. A spelling
+under which no message was read — a key of the catalogue whose tree is empty,
+a locale `options.locales` lists, or for `curly-lint` a file that is empty,
+cannot be read or is not JSON — is reported at the first message of its
+locale, and not where the locale holds none. A host that looks a locale up as
+written reads only the messages under the one it is asked for. `curly-lint`
+reads `_` in a path as `-` before it lints, so to it only case tells two
+spellings apart.
+
+#### `missing-source`
+
+Error. A source locale that is no locale of the catalogue, such as `en-GB`
+mistyped for `en`: no message is written for it, and `options.locales` lists
+none of its spellings. No other locale is compared with it, so it is reported
+once for each other locale that holds a message, at that locale's first
+message. A source the catalogue holds with no message, as a tree or files that
+are empty, is compared as any other, so each message of another locale is an
+[`orphan-message`](#orphan-message). `curly-lint` refuses a `--source` no file
+is written for, so it never reports this.
 
 #### `missing-message`
 

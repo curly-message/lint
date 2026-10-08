@@ -21,6 +21,8 @@ export type Code =
   // A catalogue: one locale, or one compared with another.
   | 'unreadable-catalogue'
   | 'duplicate-id'
+  | 'duplicate-locale'
+  | 'missing-source'
   | 'missing-message'
   | 'orphan-message'
   | 'parameter-mismatch'
@@ -49,6 +51,7 @@ export type Finding = {
 /**
  * A finding in a catalogue: the message it is in, by locale and id, and by
  * `entry`, the index of that message in the list the catalogue was read as.
+ * The locale is written as the catalogue writes it for that message.
  */
 export type CatalogueFinding = Finding & {
   locale: string;
@@ -79,7 +82,10 @@ export type MessageOptions = Options & {
 export type CatalogueOptions = Options & {
   /**
    * The locale every other is compared with. Where none is named, `en` is
-   * where the catalogue holds it, and otherwise the first locale.
+   * where the catalogue holds it, and otherwise the first locale. Two tags
+   * that differ only in case, or in `_` for `-`, name one locale. A source no
+   * message and no locale of `locales` is written for is a `missing-source`
+   * error; one that holds no message is compared as any other.
    */
   source?: string;
 };
@@ -87,7 +93,9 @@ export type CatalogueOptions = Options & {
 export type EntriesOptions = CatalogueOptions & {
   /**
    * The locales the catalogue is written for, a locale with no message among
-   * them, which lacks every message of the source locale.
+   * them, which lacks every message of the source locale. Each is told apart
+   * from another as `source` is, and a spelling of a locale whose messages
+   * are written otherwise is a `duplicate-locale` warning.
    */
   locales?: readonly string[];
 };

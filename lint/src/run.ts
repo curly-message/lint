@@ -8,6 +8,7 @@ import type { Pattern, Placed, Reader, Reading } from './locale';
 import { lintMessage } from './message';
 import { readCatalogue } from './read';
 import type { Located } from './read';
+import { localeKey } from './tag';
 import type { Finding, Severity } from './types';
 
 export const USAGE = `Usage: curly-lint [options] <pattern, file or directory>...
@@ -370,7 +371,7 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
       const kept: typeof ranked = [];
 
       for (const { file, order } of ranked) {
-        const [at, id] = pattern ? [placedAt, `${file.real}\0${file.placed.locale ?? given ?? ''}`] : [plainAt, file.real];
+        const [at, id] = pattern ? [placedAt, `${file.real}\0${localeKey(file.placed.locale ?? given ?? '')}`] : [plainAt, file.real];
 
         if (pattern) patterned.add(file.real);
         if (at.has(id)) continue;
@@ -466,7 +467,7 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
 
   if (!comparable) io.err('What a directory that cannot be read holds is unknown, so no locale is compared with another.\n');
 
-  if (source && comparable && !locales.has(source)) {
+  if (source && comparable && ![...locales].some((locale) => localeKey(locale) === localeKey(source))) {
     io.err(`No file given is written for the source locale \`${source}\`.\n`);
 
     return 2;

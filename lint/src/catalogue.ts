@@ -1,5 +1,6 @@
 import { definedBy, finding, FORMATTING, lintTree, quoted, readingOf, resolvable } from './message';
 import { numberOf } from './plural';
+import { localeKey } from './tag';
 import { read } from './tree';
 import type { Placeholder, Tree } from './tree';
 import type { Catalogue, CatalogueFinding, CatalogueOptions, Code, EntriesOptions, Finding } from './types';
@@ -148,48 +149,105 @@ export const lintEntriesComparing = (entries: readonly Entry[], options: Entries
   const add = (entry: number, found: Finding) => findings.push({ ...found, locale: entries[entry].locale, id: entries[entry].id, entry });
   const make = (entry: number, code: Code, section: string | undefined, message: string, start = 0, end = 0) => add(entry, finding(code, section, message, start, end));
 
-  // The first message under an id is the one a locale is compared by.
-  const locales = new Map<string, Map<string, Read>>((options.locales ?? []).map((locale) => [locale, new Map()]));
+  // Each locale by its key, named as its first message writes it, or as
+  // `options.locales` does, with the first message under each id, the one
+  // the locale is compared by.
+  type Locale = { name: string, written?: string, messages: Map<string, Read> };
+  // Once a locale has two spellings, each keeps the ids it defines; until
+  // then, those of the locale's messages are the first spelling's.
+  type Spelling = { locale: Locale, ids?: Set<string> };
+  const locales = new Map<string, Locale>();
+  const spelled = new Map<string, Spelling>();
+  const spellingOf = (written: string) => {
+    let found = spelled.get(written);
 
-  entries.forEach(({ locale, id, message }, entry) => {
+    if (!found) {
+      const key = localeKey(written);
+      const locale = locales.get(key) ?? { name: written, messages: new Map<string, Read>() };
+
+      locales.set(key, locale);
+      found = { locale };
+      spelled.set(written, found);
+    }
+
+    return found;
+  };
+
+  for (const locale of options.locales ?? []) spellingOf(locale);
+
+  entries.forEach(({ locale: written, id, message }, entry) => {
     const tree = read(message);
 
-    for (const found of lintTree(message, tree, { modifiers: hosted, intl: options.intl, locale })) add(entry, found);
+    for (const found of lintTree(message, tree, { modifiers: hosted, intl: options.intl, locale: written })) add(entry, found);
 
-    const messages = locales.get(locale) ?? new Map<string, Read>();
+    const spelling = spellingOf(written);
+    const { locale } = spelling;
 
-    locales.set(locale, messages);
-
-    if (messages.has(id)) {
-      make(entry, 'duplicate-id', undefined, `${quoted(id)} is defined again in ${quoted(locale)}, so one of the two messages is never read.`);
-    } else {
-      messages.set(id, { entry, names: comparing && comparing(id) ? namesOf(tree) : undefined });
+    if (locale.written === undefined) {
+      locale.written = written;
+      locale.name = written;
+    } else if (locale.written !== written && !spelling.ids) {
+      spelling.ids = new Set();
+      spellingOf(locale.written).ids ??= new Set(locale.messages.keys());
+      make(entry, 'duplicate-locale', undefined, `${quoted(written)} is ${quoted(locale.written)} written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.`);
     }
+
+    const first = locale.messages.get(id);
+
+    if (spelling.ids ? spelling.ids.has(id) : first) {
+      make(entry, 'duplicate-id', undefined, `${quoted(id)} is defined again in ${quoted(written)}, so one of the two messages is never read.`);
+    } else if (first && entries[first.entry].message !== message) {
+      make(entry, 'duplicate-id', undefined, `${quoted(id)} is also defined in ${quoted(entries[first.entry].locale)}, the same locale written another way, so a host that reads the two as one never reads one of the two messages.`);
+    }
+
+    spelling.ids?.add(id);
+    if (!first) locale.messages.set(id, { entry, names: comparing && comparing(id) ? namesOf(tree) : undefined });
   });
 
-  const source = options.source ?? (locales.has('en') ? 'en' : [...locales.keys()][0]);
-  const reference = locales.get(source);
+  // A spelling `options.locales` gives a locale whose messages are written
+  // otherwise, reported on the locale's first message.
+  for (const written of new Set(options.locales ?? [])) {
+    const { locale, ids } = spelled.get(written) as Spelling;
+    const [opening] = locale.messages.values();
 
-  if (!comparing || !reference) return findings;
+    if (opening && locale.written !== written && !ids) make(opening.entry, 'duplicate-locale', undefined, `${quoted(written)}, under which no message was read, is ${quoted(locale.written as string)} written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.`);
+  }
 
-  for (const [locale, messages] of locales) {
-    if (locale === source) continue;
+  if (!comparing) return findings.sort(order);
 
-    for (const [id, { entry, names }] of reference) {
-      if (names && !messages.has(id)) make(entry, 'missing-message', undefined, `${quoted(locale)} has no message ${quoted(id)}.`);
+  const named = typeof options.source === 'string' ? options.source : undefined;
+  const reference = named === undefined ? locales.get('en') ?? [...locales.values()][0] : locales.get(localeKey(named));
+
+  if (!reference) {
+    for (const { name, messages } of locales.values()) {
+      const [opening] = messages.values();
+
+      if (opening?.names) make(opening.entry, 'missing-source', undefined, `The source locale ${quoted(named as string)} is no locale of the catalogue, so nothing ${quoted(name)} holds is compared with it.`);
+    }
+
+    return findings.sort(order);
+  }
+
+  for (const other of locales.values()) {
+    if (other === reference) continue;
+
+    const { name, messages } = other;
+
+    for (const [id, { entry, names }] of reference.messages) {
+      if (names && !messages.has(id)) make(entry, 'missing-message', undefined, `${quoted(name)} has no message ${quoted(id)}.`);
     }
 
     for (const [id, { entry, names }] of messages) {
       if (!names) continue;
 
-      const compared = reference.get(id);
+      const compared = reference.messages.get(id);
 
       if (!compared) {
-        make(entry, 'orphan-message', undefined, `${quoted(source)} has no message ${quoted(id)}, so nothing this message renders is compared with it.`);
+        make(entry, 'orphan-message', undefined, `${quoted(reference.name)} has no message ${quoted(id)}, so nothing this message renders is compared with it.`);
         continue;
       }
 
-      if (compared.names) compare(source, compared.names, entry, names, modifiers, make);
+      if (compared.names) compare(entries[compared.entry].locale, compared.names, entry, names, modifiers, make);
     }
   }
 
