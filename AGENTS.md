@@ -82,8 +82,9 @@ decides, with or without its locale. The rules that compare locales stay the
 command's, since ESLint hands a rule one file.
 
 Each workspace's `bench/rows.mjs` lists the rows of its benchmark, each read
-off the build. `bench/harness.mjs` at the root measures them for both, and is
-the same file in every repository of the family.
+off the build. `bench/harness.mjs` at the root measures them for both,
+`bench/check/` beside it holds the rows it is checked on, and both are the same
+in every repository of the family.
 
 ## The format decides, not the linter
 
