@@ -4,7 +4,11 @@ name: Benchmark
 # summary, one per workspace. It fails where the benchmark does: a row of the
 # branch that fails, or, unless the PR carries the `bench-accepted` label, a
 # count that grew, a row gone missing or changing kind, or a row that fails on
-# the base. `bench-label.yml` re-runs it when that label changes.
+# the base. Whether the base has the workspace's benchmark is read from the
+# base commit: one without its `bench/rows.mjs`, as the base of the PR that
+# adds the workspace or its rows, is neither built nor compared, so only the
+# branch's own benchmark can fail the job. `bench-label.yml` re-runs it when
+# that label changes.
 on:
   pull_request:
     paths:
@@ -56,21 +60,35 @@ jobs:
           node-version: 24
 
       # The harness on rows that fail wherever two measurements share a
-      # process, so a table below is one whose sides were measured apart.
+      # process, so a table below is one whose sides were measured apart, and
+      # on each base it may be given: none, one with rows, and a path that
+      # holds none, which fails.
       - name: Check the harness
         timeout-minutes: 5
         working-directory: change/bench/check
-        run: node ../harness.mjs --compare .
+        run: node check.mjs
+
+      # Read from the base commit rather than off the checkout, so a git that
+      # fails, an empty sha included, fails the step instead of reading as a
+      # base without rows.
+      - name: Read whether the base has the benchmark
+        id: base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          rows=$(git -C base ls-tree --name-only "$BASE_SHA" -- "$PACKAGE/bench/rows.mjs")
+          if [ -n "$rows" ]; then echo holds=true; else echo holds=false; fi >> "$GITHUB_OUTPUT"
 
       # Each side from its own lockfile, running no install script, since the
       # job holds a token that writes to the PR. A base without the workspace's
-      # rows has nothing to compare, so it is not built; one that does not
+      # benchmark has nothing to compare, so it is not built; one that does not
       # build leaves rows that fail, which the label can accept.
       - name: Install and build
         env:
-          PACKAGE: ${{ matrix.package }}
+          HOLDS: ${{ steps.base.outputs.holds }}
         run: |
-          if [ -f "base/$PACKAGE/bench/rows.mjs" ]; then
+          if [ "$HOLDS" = true ]; then
             (cd base && npm ci --ignore-scripts && npm run build) || echo "::warning::The base did not install or build."
           fi
           (cd change && npm ci --ignore-scripts && npm run build)
@@ -89,11 +107,12 @@ jobs:
         working-directory: change/${{ matrix.package }}
         env:
           ACCEPTED: ${{ steps.labels.outputs.accepted }}
+          HOLDS: ${{ steps.base.outputs.holds }}
           PACKAGE: ${{ matrix.package }}
         run: |
           flags=()
-          # A workspace the base does not have is measured alone.
-          if [ -f "../../base/$PACKAGE/package.json" ]; then flags+=(--compare "../../base/$PACKAGE"); fi
+          # A workspace the base has no benchmark of is measured alone.
+          if [ "$HOLDS" = true ]; then flags+=(--compare "$GITHUB_WORKSPACE/base/$PACKAGE"); fi
           if [ "$ACCEPTED" = true ]; then flags+=(--accepted); fi
           status=0
           node ../bench/harness.mjs "${flags[@]}" > "$RUNNER_TEMP/bench.md" || status=$?
