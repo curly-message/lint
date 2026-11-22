@@ -215,6 +215,13 @@ export default [
 
     return () => lintCatalogue(tree);
   } },
+  { name: 'lintCatalogue: 5 000 messages under each of two spellings of one locale', kind: 'time', run: () => {
+    const { en } = catalogue(10000);
+    const names = Object.keys(en);
+    const tree = { en: Object.fromEntries(names.slice(0, 50).map((name) => [name, en[name]])), EN: Object.fromEntries(names.slice(50).map((name) => [name, en[name]])) };
+
+    return () => lintCatalogue(tree);
+  } },
   { name: 'readCatalogue: 10 000 messages of JSON', kind: 'time', run: () => {
     const text = JSON.stringify(catalogue(10000).cs, null, 2);
 
