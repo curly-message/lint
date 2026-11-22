@@ -32,4 +32,13 @@ describe('readCatalogue', () => {
   it('refuses a catalogue nested deeper than any call stack goes, and never overflows', () => {
     expect(readCatalogue(`{"a": ${'['.repeat(6000)}"x"${']'.repeat(6000)}}`)).toMatchObject({ ok: false, message: 'The catalogue nests deeper than 512 levels' });
   });
+
+  // A fixture states its text as JSON, which no reader of every language
+  // takes an unpaired surrogate in.
+  it('stops at an unpaired surrogate written as itself, and reads a pair written so', () => {
+    expect(readCatalogue('{"a": "b", "c": "x\udfff"}')).toEqual({ ok: false, message: 'Expected well-formed Unicode text, found the unpaired surrogate U+DFFF', offset: 18 });
+    expect(readCatalogue('{"\ud800": "b"}')).toEqual({ ok: false, message: 'Expected well-formed Unicode text, found the unpaired surrogate U+D800', offset: 2 });
+    expect(readCatalogue('{"a": "\ud800"}')).toEqual({ ok: false, message: 'Expected well-formed Unicode text, found the unpaired surrogate U+D800', offset: 7 });
+    expect(ok(readCatalogue('{"a": "\ud83d\ude00"}')).strings.map(({ value }) => value)).toEqual(['\ud83d\ude00']);
+  });
 });

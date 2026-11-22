@@ -28,6 +28,11 @@ describe('a message', () => {
     expect(lint('{{n:plural; one:a; other:b;}}', { locale: 'xx' })).toEqual([]);
     expect(lint('{{n:plural; one:a; other:b;}}', { locale: 'not a locale' })).toEqual([]);
   });
+
+  it('finds nothing in a message that is not well-formed Unicode text', () => {
+    for (const message of ['\ud800 {{', '{{ \udc00', '{{v:zz}}\ud83d']) expect(lintMessage(message)).toEqual([]);
+    expect(lint('\ud83d\ude00 {{')).toEqual([['unclosed-placeholder', '{{']]);
+  });
 });
 
 describe('the rule table', () => {

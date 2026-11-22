@@ -1,6 +1,7 @@
-import { byPlace, definedBy, finding, FORMATTING, lintTree, quoted, readingOf, resolvable } from './message';
+import { byPlace, definedBy, finding, FORMATTING, lintTree, quoted, readingOf, resolvable, unpaired } from './message';
 import { intlPlurals, numberOf } from './plural';
 import type { Plurals } from './plural';
+import { shown } from './read';
 import { localeKey } from './tag';
 import { read } from './tree';
 import type { Placeholder, Tree } from './tree';
@@ -255,13 +256,51 @@ export const lintEntriesComparing = (entries: readonly Entry[], options: Entries
   return findings.sort(order);
 };
 
+// The first entry whose locale, id or message is not well-formed Unicode
+// text, which of the three, and the surrogate in it that pairs with no other.
+const illFormed = (entries: readonly Entry[]) => {
+  for (const [index, entry] of entries.entries()) {
+    for (const field of ['locale', 'id', 'message'] as const) {
+      const unit = unpaired(entry[field]);
+
+      if (unit) return { index, field, unit };
+    }
+  }
+
+  return undefined;
+};
+
+// What `String.prototype.toWellFormed` does, which the declarations of the
+// lib level a consumer compiles against lack.
+const wellFormed = <T>(text: T) => (typeof text === 'string' ? text.replace(/\p{Cs}/gu, '\ufffd') : text);
+
+// Lints the entries up to `fault`, where there is one. What the catalogue
+// holds past it is unknown, so no message is then compared with another
+// locale's, as `curly-lint` compares nothing a file that is not JSON holds.
+const lintUpTo = (entries: readonly Entry[], given: EntriesOptions, plurals: Plurals, fault: ReturnType<typeof illFormed>): CatalogueFinding[] => {
+  // A caller's options are no catalogue text: each unpaired surrogate in one
+  // reads as U+FFFD, as a command's arguments converted lossily do.
+  const options = { ...given, source: wellFormed(given.source), locales: Array.isArray(given.locales) ? given.locales.map(wellFormed) : given.locales };
+
+  if (!fault) return lintEntriesComparing(entries, options, () => true, plurals);
+
+  const { index, field, unit } = fault;
+  const { locale, id } = entries[index];
+  const message = `This entry's ${field} is not well-formed Unicode text: it holds the unpaired surrogate ${shown(unit)}, so the catalogue is read no further.`;
+
+  return [...lintEntriesComparing(entries.slice(0, index), options, () => false, plurals), { ...finding('unreadable-catalogue', undefined, message, 0, 0), locale, id, entry: index }];
+};
+
 /** Lints a list of messages as `lintEntries` does, with the plural rules `plurals` has. */
-export const lintEntriesWith = (plurals: Plurals) => (entries: readonly Entry[], options: EntriesOptions = {}): CatalogueFinding[] => lintEntriesComparing(entries, options, () => true, plurals);
+export const lintEntriesWith = (plurals: Plurals) => (entries: readonly Entry[], options: EntriesOptions = {}): CatalogueFinding[] => lintUpTo(entries, options, plurals, illFormed(entries));
 
 /**
  * Lints a list of messages as one catalogue: each message, each with its
  * locale, then every locale against the source one. A finding names its
- * message by `entry`, the index of the message in `entries`.
+ * message by `entry`, the index of the message in `entries`. The list is read
+ * no further than an entry whose locale, id or message is not well-formed
+ * Unicode text, which is an `unreadable-catalogue` finding, and no message is
+ * then compared with another locale's.
  */
 export const lintEntries = lintEntriesWith(intlPlurals);
 
@@ -327,9 +366,12 @@ export const lintCatalogue = (catalogue: Catalogue, options: CatalogueOptions = 
     if (walked.cut) cut.push(entries.length - 1);
   }
 
-  const findings = lintEntries(entries, { ...options, locales: locales.map(([locale]) => locale) });
+  const fault = illFormed(entries);
+  const findings = lintUpTo(entries, { ...options, locales: locales.map(([locale]) => locale) }, intlPlurals, fault);
+  // No message past one that is not well-formed text is read.
+  const read = fault?.index ?? entries.length;
 
-  for (const entry of cut) {
+  for (const entry of cut.filter((last) => last < read)) {
     const { locale, id } = entries[entry];
     const message = `${quoted(locale)} holds more than ${MAX_MESSAGES} messages, an object it holds in several places counted in each, so it is read no further than this one.`;
 

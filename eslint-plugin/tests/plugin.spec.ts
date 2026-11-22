@@ -58,6 +58,10 @@ describe('in JavaScript', () => {
     expect(lint("t('{{');\nresolve(id, '{{');\nresolve(`{{${x}`);\nresolve[name]('{{');", 'src/app.js')).toEqual([]);
   });
 
+  it('reports nothing in a message that is not well-formed Unicode text', () => {
+    expect(lint("resolve('\\ud800 {{');\nresolve('\\ud83d\\ude00 {{');", 'src/app.js').map(({ ruleId, at }) => `${ruleId} ${at}`)).toEqual(['@curly-message/unclosed-placeholder 2:9-2:26']);
+  });
+
   it('reads the callees a project names', () => {
     expect(lint("translate('{{');\nresolve('{{');", 'src/app.js', { callees: ['translate'] }).map(({ at }) => at)).toEqual(['1:12-1:14']);
   });

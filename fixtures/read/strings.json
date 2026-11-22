@@ -87,6 +87,20 @@
         }
       ],
       "findings": []
+    },
+    {
+      "name": "a surrogate pair spelled by two escapes",
+      "text": "{\"a\": \"\\ud83d\\ude00\"}",
+      "strings": [
+        {
+          "path": ["a"],
+          "value": "\ud83d\ude00",
+          "start": 6,
+          "end": 20,
+          "offsets": [7, 13, 19]
+        }
+      ],
+      "findings": []
     }
   ]
 }
