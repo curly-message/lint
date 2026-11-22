@@ -5,7 +5,9 @@ linter answers for each, as data any language reads. Each file is JSON, holds
 the cases of one kind, and validates against [`schema.json`](./schema.json).
 The TypeScript linter runs every case in
 [`lint/tests/fixtures.spec.ts`](../lint/tests/fixtures.spec.ts), against its
-source and against its build.
+source and against its build. The Rust linter runs every case in
+[`rust/tests/fixtures/`](../rust/tests/fixtures), its offsets converted from
+UTF-16 code units to bytes.
 
 | Directory | A case is | Reached in the TypeScript linter through |
 |-----------|-----------|------------------------------------------|
@@ -49,6 +51,12 @@ linter answers them in it.
 
 Every offset and span counts UTF-16 code units, of the message or of the
 file's text. An implementation that counts otherwise converts at its edge.
+
+A finding shows a character by its code point where Unicode gives it a
+general category of Other (C) or Separator (Z), which each implementation
+reads from the Unicode data its host has. So a case holds no character
+Unicode assigned after the oldest version a supported host has, and none it
+has not assigned, a noncharacter aside.
 
 ## Plural rules
 

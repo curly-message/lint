@@ -20,18 +20,23 @@ checked out beside this repository on an up-to-date `main`, otherwise
 
 ## The repository
 
-A linter for the [Curly Message Format](https://github.com/curly-message/spec),
-one npm workspace per package:
+A linter for the [Curly Message Format](https://github.com/curly-message/spec):
+one npm workspace per JavaScript package, and the Rust crate beside them.
 
 | Path | Package |
 |------|---------|
 | `lint/` | `@curly-message/lint`: the rules, a library over them and the `curly-lint` command |
 | `eslint-plugin/` | `@curly-message/eslint-plugin`: the rules a single message decides, as ESLint rules |
+| `rust/` | `curly-message-lint`: the same rules, catalogue reader and `curly-lint` command in Rust |
 
 - **Workspaces of one root**, because the plugin depends on the library and
   both change together: one lockfile at the root, one `npm ci`, each
   workspace with its own build, tests, README, CHANGELOG, LICENSE and version
-  line. Run every command from the root.
+  line. Run every npm command from the root.
+- **`rust/` is a Cargo workspace of its own**, outside npm's: the crate, and
+  `bench/`, the program its benchmark measures, which is not published. Run
+  every cargo command from `rust/`. The two implementations share no code:
+  what holds them to one answer is `fixtures/`.
 - **Release tags are namespaced by workspace** — `lint-v1.0.0`,
   `eslint-plugin-v1.0.0` — and the publish workflow cuts them
   (`.github/workflows/publish.yml`; the README's Releasing section says what
@@ -56,6 +61,19 @@ Tech stack — **ground truth, do not assume otherwise**:
 | Supported runtimes | Node 22+, Bun, Deno 2 |
 | CI | `tests.yml`, `bench.yml` and `bench-label.yml`, `publish.yml` |
 
+Tech stack of `rust/` — **ground truth, do not assume otherwise**:
+
+| | |
+|---|---|
+| Package | `curly-message-lint`, unreleased: a library and the `curly-lint` binary |
+| Language | Rust, edition 2024, no `unsafe` (the workspace forbids it) |
+| Toolchains | Rust 1.88 and stable, on Linux, macOS and Windows; the library without `cldr` also builds for `wasm32-unknown-unknown` |
+| Tests | `cargo test`; the fixture runner through `libtest-mimic`, a case a test |
+| Lint | rustfmt and Clippy, at the lints `Cargo.toml` denies: a panic, an index, a slice of a `str`, unchecked arithmetic, a character outside ASCII in a literal, a write to the standard streams |
+| Features | `cldr`, default: the plural rules of the Unicode CLDR as data in the crate (`cldr/`, under the Unicode License v3), which the binary requires |
+| Dependencies | `curly-message-parser`, and `unicode-properties` for the characters a report shows by code point; `serde_json`, `sha2` and `libtest-mimic` for the tests alone |
+| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml` |
+
 Commands, run from the root:
 
 | Command | What it does |
@@ -67,6 +85,17 @@ Commands, run from the root:
 | `npm run bench --workspace <path> -- --compare <dir>` | the same, beside the workspace checked out and built at `<dir>` — what `bench.yml` runs on a PR |
 | `npm run lint:fix` | fix what the formatting contract reports |
 
+Commands, run from `rust/`:
+
+| Command | What it does |
+|---------|--------------|
+| `cargo test`, `cargo test --no-default-features` | the suite, with the plural rules the crate carries and without them |
+| `cargo fmt --all --check`, `cargo fmt --all` | report, or fix, what the formatting contract reports |
+| `cargo clippy --workspace --all-targets -- -D warnings` | the lints; once more with `-p curly-message-lint --no-default-features` |
+| `cargo build --lib --no-default-features --target wasm32-unknown-unknown` | the library as a host with plural rules of its own takes it |
+| `sh bench/prepare.sh && node bench/harness.mjs` | build the release into `bench/dist/`, then the benchmark (`bench/rows.mjs`) |
+| `node bench/harness.mjs --compare <dir>` | the same, beside the crate prepared at `<dir>` — what `bench.yml` runs on a PR |
+
 Map of `lint/src/`:
 
 | Path | Role |
@@ -77,6 +106,22 @@ Map of `lint/src/`:
 | `read.ts`, `locale.ts` | read files, and the locale and namespace a pattern places in a path |
 | `run.ts` | the command; `cli.ts` only starts it |
 | `internal.ts` | what the fixture set reaches that the package does not export: the rules handed plural rules in place of `Intl`'s, and the findings a file yields as it is read; built beside the entry, and left out of `exports` and of the tarball |
+
+Map of `rust/`:
+
+| Path | Role |
+|------|------|
+| `src/rules.rs` | the table of rules, `RULES` |
+| `src/tree.rs` | reads a message off the parser's tree |
+| `src/message.rs`, `src/catalogue.rs` | the rules |
+| `src/plural.rs` | `Plurals`, what a locale's plural rules are asked through, and `Table`, rules stated as data |
+| `src/cldr.rs`, `cldr/` | `Cldr`: the CLDR's plural rules and language aliases as its JSON, and the evaluator of its rule syntax, behind the `cldr` feature |
+| `src/tag.rs` | a locale tag's key and its subtags |
+| `src/read.rs`, `src/locale.rs` | read a catalogue's text, and the locale and namespace a pattern places in a path |
+| `src/command.rs` | the command over a `Host`, which reads the files and takes the report |
+| `src/bin/curly-lint/` | the binary: the host over the file system and the standard streams |
+| `tests/` | the suite (see *Tests*) |
+| `bench/` | the benchmark's program, its rows, and the crate's copies of the harness and of `check/` |
 
 The plugin is `eslint-plugin/src/index.ts`: the rules a single message
 decides, with or without its locale. The rules that compare locales stay the
@@ -91,7 +136,9 @@ in place of the host's; `fixtures/schema.json` is their schema and
 Each workspace's `bench/rows.mjs` lists the rows of its benchmark, each read
 off the build. `bench/harness.mjs` at the root measures them for both,
 `bench/check/` beside it holds the rows it is checked on, and both are the same
-in every repository of the family.
+in every repository of the family. `rust/bench/` holds its own copies of
+both, which `tests.yml` holds to the root's, and rows that read the release
+build over a child process.
 
 ## The format decides, not the linter
 
@@ -108,12 +155,27 @@ in every repository of the family.
   with the parser it resolves with. Where a rule needs a reading `cst` does
   not give — what `eq` compares, what `plural` takes for a number — it follows
   the parser's reading of the specification, and a disagreement is a bug in
-  one of them: decide which and say so.
+  one of them: decide which and say so. The crate reads a message through
+  `curly-message-parser`'s `cst` and its public conversions, and copies none
+  of the parser's code.
+- **The two implementations agree.** A message, a list of entries or a file
+  one answers otherwise than the other is a bug in one of them, and the case
+  that shows it joins `fixtures/`. What they are allowed to differ in is what
+  each host brings: the plural rules (`Intl`'s in JavaScript, the CLDR's the
+  crate carries in Rust), the unit of an offset (UTF-16 code units, bytes),
+  what the system says of a path that cannot be read, and the version of
+  Unicode a character's general category is read from (the runtime's in
+  JavaScript, `unicode-properties`' in Rust), which decides whether a report
+  shows a character or its code point. A fixture holds no character two
+  supported hosts read otherwise: none assigned after the oldest of their
+  versions of Unicode, and none yet unassigned but a noncharacter.
 - **No payload.** Every rule is decidable from a message, its locale, or a
   catalogue. What a payload decides is the parser's to report while it
   resolves.
 - **A linter never throws on a message**: any string is a message it can
-  read, and a file that is not JSON is a finding, not a crash.
+  read, and a file that is not JSON is a finding, not a crash. In Rust that
+  is no panic on any input: the lints deny what can raise one, and the
+  binary exits 2 on a fault it did not foresee.
 
 ## Robustness
 
@@ -130,9 +192,12 @@ editors on every keystroke.
 
 ## Docs and findings
 
-- The docs are the root `README.md` and each workspace's `README.md` and
-  `CHANGELOG.md`. Each workspace's README lists every rule, and a test holds
-  it to `RULES`: a new rule is a row in `RULES`, a section in
+- The docs are the root `README.md`, each workspace's `README.md` and
+  `CHANGELOG.md`, and the crate's, with the doc comments of its public items.
+  `rust/README.md` lists every rule in one table, which a test holds to
+  `RULES`, and leaves each rule's description to `lint/README.md`. Each
+  workspace's README lists every rule, and a test holds it to `RULES`: a new
+  rule is a row in `RULES`, a section in
   `lint/README.md`, and — where a single message decides it — a row in
   `eslint-plugin/README.md`.
 - A finding's message is English, says what is wrong and what happens instead,
@@ -155,6 +220,16 @@ editors on every keystroke.
   build ships are the source's, compiled as a consumer compiles them: through
   the package's own `exports`, at `skipLibCheck: false`.
   `npm run typecheck:dist` runs it; `npm test` runs it before the suite.
+- `rust/tests/fixtures/` runs the same set: it holds every file to
+  `fixtures/schema.json`, read by a validator of the keywords the schema
+  uses, and runs every case, converting the set's UTF-16 offsets to bytes at
+  its edge. `rust/tests/command.rs` runs the command over files held in
+  memory, `rust/tests/cli.rs` through the built binary, and
+  `rust/tests/library.rs` holds what data cannot state: the CLDR data's
+  digests, random and large inputs that must not panic, and the README's
+  table of rules and its version of Unicode. The tests in `rust/src/cldr.rs`
+  hold its evaluator to the samples the CLDR's rules state, and the README's
+  example runs as a doc test where the crate has `cldr`.
 - Each suite imports its package by name and runs twice: against the source,
   and under `--mode dist` against the build a release ships. An import of the
   package by a path into `src/` tests the source twice; the command's `run`,
