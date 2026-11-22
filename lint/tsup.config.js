@@ -5,7 +5,7 @@ export default defineConfig(
     clean: true,
     dts: { entry: 'src/index.ts' },
     format: ['esm'],
-    entry: ['src/index.ts', 'src/cli.ts'],
+    entry: ['src/index.ts', 'src/cli.ts', 'src/internal.ts'],
     minify: !options.watch,
     sourcemap: options.watch,
     splitting: true,

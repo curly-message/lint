@@ -76,10 +76,17 @@ Map of `lint/src/`:
 | `message.ts`, `catalogue.ts` | the rules |
 | `read.ts`, `locale.ts` | read files, and the locale and namespace a pattern places in a path |
 | `run.ts` | the command; `cli.ts` only starts it |
+| `internal.ts` | what the fixture set reaches that the package does not export: the rules handed plural rules in place of `Intl`'s, and the findings a file yields as it is read; built beside the entry, and left out of `exports` and of the tarball |
 
 The plugin is `eslint-plugin/src/index.ts`: the rules a single message
 decides, with or without its locale. The rules that compare locales stay the
 command's, since ESLint hands a rule one file.
+
+`fixtures/` at the root is the linter's contract as data, for every
+implementation: JSON cases of a message, a list of entries or a catalogue
+file's text, each with its findings, and the plural rules a case is read with
+in place of the host's; `fixtures/schema.json` is their schema and
+`fixtures/README.md` says what a runner does.
 
 Each workspace's `bench/rows.mjs` lists the rows of its benchmark, each read
 off the build. `bench/harness.mjs` at the root measures them for both,
@@ -133,8 +140,15 @@ editors on every keystroke.
 
 ## Tests
 
-- `lint/tests/` drives the rules through `lintMessage` and `lintCatalogue`,
-  the reader through `readCatalogue`, and the command through `run` from
+- `lint/tests/fixtures.spec.ts` validates every file of `fixtures/` against
+  its schema and runs every case: a message through `lintMessage`, a list of
+  entries through `lintEntries`, each with the case's plural rules, and a
+  file's text through `readCatalogue`. A case data can state is a fixture,
+  not an inline test.
+- The rest of `lint/tests/` holds what data cannot state: `lintCatalogue`
+  and `flatten` over objects of the host, input of another type than the
+  declarations give, the plural rules of the host's `Intl` asked directly,
+  inputs too large for a fixture, and the command through `run` from
   `src/run.ts`, then once through the built `dist/cli.js`, as a project runs
   it. `eslint-plugin/tests/` drives the plugin through ESLint's own `Linter`.
 - Each workspace's `tests/types/surface.ts` asserts that the declarations the
@@ -144,4 +158,6 @@ editors on every keystroke.
 - Each suite imports its package by name and runs twice: against the source,
   and under `--mode dist` against the build a release ships. An import of the
   package by a path into `src/` tests the source twice; the command's `run`,
-  which the package does not export, is the one module imported by path.
+  which the package does not export, is the one module imported by path, and
+  `#internal`, which the suite resolves to `src/internal.ts` or to its build,
+  the one imported by a name the package does not give.

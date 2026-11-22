@@ -1,0 +1,315 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "The source locale every other is compared with, and `missing-source`.",
+  "cases": [
+    {
+      "name": "`en` is the source where none is named",
+      "entries": [
+        {
+          "locale": "cs",
+          "id": "a",
+          "message": "A"
+        },
+        {
+          "locale": "cs",
+          "id": "only",
+          "message": "cs"
+        },
+        {
+          "locale": "en",
+          "id": "a",
+          "message": "A"
+        },
+        {
+          "locale": "en",
+          "id": "only",
+          "message": "en"
+        },
+        {
+          "locale": "de",
+          "id": "a",
+          "message": "A"
+        }
+      ],
+      "options": {
+        "locales": ["cs", "en", "de"]
+      },
+      "findings": [
+        {
+          "entry": 3,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`de` has no message `only`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a source named",
+      "entries": [
+        {
+          "locale": "cs",
+          "id": "a",
+          "message": "A"
+        },
+        {
+          "locale": "cs",
+          "id": "only",
+          "message": "cs"
+        },
+        {
+          "locale": "en",
+          "id": "a",
+          "message": "A"
+        },
+        {
+          "locale": "en",
+          "id": "only",
+          "message": "en"
+        },
+        {
+          "locale": "de",
+          "id": "a",
+          "message": "A"
+        }
+      ],
+      "options": {
+        "source": "cs",
+        "locales": ["cs", "en", "de"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`de` has no message `only`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "the first locale is the source where there is no `en`",
+      "entries": [
+        {
+          "locale": "cs",
+          "id": "a",
+          "message": "A"
+        },
+        {
+          "locale": "de",
+          "id": "b",
+          "message": "B"
+        }
+      ],
+      "options": {
+        "locales": ["cs", "de"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`de` has no message `a`.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 1,
+          "code": "orphan-message",
+          "severity": "warning",
+          "message": "`cs` has no message `b`, so nothing this message renders is compared with it.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "missing-source: a source the catalogue does not hold",
+      "entries": [
+        {
+          "locale": "cs",
+          "id": "a",
+          "message": "A"
+        },
+        {
+          "locale": "cs",
+          "id": "only",
+          "message": "cs"
+        },
+        {
+          "locale": "en",
+          "id": "a",
+          "message": "A"
+        },
+        {
+          "locale": "en",
+          "id": "only",
+          "message": "en"
+        },
+        {
+          "locale": "de",
+          "id": "a",
+          "message": "A"
+        }
+      ],
+      "options": {
+        "source": "fr",
+        "locales": ["cs", "en", "de"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "missing-source",
+          "severity": "error",
+          "message": "The source locale `fr` is no locale of the catalogue, so nothing `cs` holds is compared with it.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 2,
+          "code": "missing-source",
+          "severity": "error",
+          "message": "The source locale `fr` is no locale of the catalogue, so nothing `en` holds is compared with it.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 4,
+          "code": "missing-source",
+          "severity": "error",
+          "message": "The source locale `fr` is no locale of the catalogue, so nothing `de` holds is compared with it.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "missing-source: once for each other locale",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "hi",
+          "message": "Hi {{name}}"
+        },
+        {
+          "locale": "en",
+          "id": "bye",
+          "message": "Bye"
+        },
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        },
+        {
+          "locale": "cs",
+          "id": "bye",
+          "message": "Nashle"
+        }
+      ],
+      "options": {
+        "source": "en-GB",
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "missing-source",
+          "severity": "error",
+          "message": "The source locale `en-GB` is no locale of the catalogue, so nothing `en` holds is compared with it.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 2,
+          "code": "missing-source",
+          "severity": "error",
+          "message": "The source locale `en-GB` is no locale of the catalogue, so nothing `cs` holds is compared with it.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "missing-source: locales that hold no message",
+      "entries": [],
+      "options": {
+        "source": "de",
+        "locales": ["en", "cs"]
+      },
+      "findings": []
+    },
+    {
+      "name": "missing-source: no locale",
+      "entries": [],
+      "options": {
+        "source": "de",
+        "locales": []
+      },
+      "findings": []
+    },
+    {
+      "name": "a source that holds no message, compared as any other",
+      "entries": [
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        },
+        {
+          "locale": "cs",
+          "id": "bye",
+          "message": "Nashle"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "orphan-message",
+          "severity": "warning",
+          "message": "`en` has no message `hi`, so nothing this message renders is compared with it.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 1,
+          "code": "orphan-message",
+          "severity": "warning",
+          "message": "`en` has no message `bye`, so nothing this message renders is compared with it.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a source of `locales` that holds no message, named in another case",
+      "entries": [
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        }
+      ],
+      "options": {
+        "source": "DE",
+        "locales": ["de"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "orphan-message",
+          "severity": "warning",
+          "message": "`de` has no message `hi`, so nothing this message renders is compared with it.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    }
+  ]
+}

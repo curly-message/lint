@@ -1,0 +1,53 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "A selection that declares no options (section 9.5).",
+  "cases": [
+    {
+      "name": "`eq` with no options",
+      "message": "{{v:eq}}",
+      "findings": [
+        {
+          "code": "missing-options",
+          "severity": "error",
+          "section": "9.5",
+          "message": "`eq` selects among options and this placeholder declares none, so it takes its fallback chain.",
+          "start": 4,
+          "end": 6
+        }
+      ]
+    },
+    {
+      "name": "`plural` with an inline default alone",
+      "message": "{{n:plural; default:D;}}",
+      "findings": [
+        {
+          "code": "missing-options",
+          "severity": "error",
+          "section": "9.5",
+          "message": "`plural` selects among options and this placeholder declares none, so it takes its fallback chain.",
+          "start": 4,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "a formatting modifier, which selects nothing",
+      "message": "{{n:number}}",
+      "findings": []
+    },
+    {
+      "name": "a placeholder naming no key, which asks nothing",
+      "message": "{{:eq}}",
+      "findings": []
+    },
+    {
+      "name": "the host's own `eq`",
+      "message": "{{v:eq}}",
+      "options": {
+        "modifiers": ["eq"]
+      },
+      "findings": []
+    }
+  ]
+}

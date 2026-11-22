@@ -1,0 +1,48 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "An escape sequence that cancels nothing (section 7).",
+  "cases": [
+    {
+      "name": "backslashes in a path",
+      "message": "C:\\Users\\d",
+      "findings": [
+        {
+          "code": "inert-escape",
+          "severity": "warning",
+          "section": "7",
+          "message": "`\\U` cancels nothing, so the backslash and `U` both render. Write `\\\\U` to keep both on purpose.",
+          "start": 2,
+          "end": 4
+        },
+        {
+          "code": "inert-escape",
+          "severity": "warning",
+          "section": "7",
+          "message": "`\\d` cancels nothing, so the backslash and `d` both render. Write `\\\\d` to keep both on purpose.",
+          "start": 8,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "every escape that cancels something",
+      "message": "\\{ \\} \\: \\; \\\\ \\  ok",
+      "findings": []
+    },
+    {
+      "name": "an escape in an option key",
+      "message": "{{v; a\\x:b;}}",
+      "findings": [
+        {
+          "code": "inert-escape",
+          "severity": "warning",
+          "section": "7",
+          "message": "`\\x` cancels nothing, so the backslash and `x` both render. Write `\\\\x` to keep both on purpose.",
+          "start": 6,
+          "end": 8
+        }
+      ]
+    }
+  ]
+}

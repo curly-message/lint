@@ -1,0 +1,65 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "A plural key that is neither a category nor a number (section 11.5).",
+  "cases": [
+    {
+      "name": "keys that are neither a category nor a number",
+      "message": "{{n:plural; One:a; other:b; 1,000:c; twelve:d; 1e3:e;}}",
+      "findings": [
+        {
+          "code": "unknown-category",
+          "severity": "error",
+          "section": "11.5",
+          "message": "`One` is neither a plural category nor a number, so this option is never selected. The category is `one`, compared exactly as written.",
+          "start": 12,
+          "end": 15
+        },
+        {
+          "code": "unknown-category",
+          "severity": "error",
+          "section": "11.5",
+          "message": "`1,000` is neither a plural category nor a number, so this option is never selected.",
+          "start": 28,
+          "end": 33
+        },
+        {
+          "code": "unknown-category",
+          "severity": "error",
+          "section": "11.5",
+          "message": "`twelve` is neither a plural category nor a number, so this option is never selected.",
+          "start": 37,
+          "end": 43
+        }
+      ]
+    },
+    {
+      "name": "a category spelled in another case",
+      "message": "{{n:plural; One:a; other:b;}}",
+      "findings": [
+        {
+          "code": "unknown-category",
+          "severity": "error",
+          "section": "11.5",
+          "message": "`One` is neither a plural category nor a number, so this option is never selected. The category is `one`, compared exactly as written.",
+          "start": 12,
+          "end": 15
+        }
+      ]
+    },
+    {
+      "name": "a word that is no category",
+      "message": "{{n:plural; twelve:a; other:b;}}",
+      "findings": [
+        {
+          "code": "unknown-category",
+          "severity": "error",
+          "section": "11.5",
+          "message": "`twelve` is neither a plural category nor a number, so this option is never selected.",
+          "start": 12,
+          "end": 18
+        }
+      ]
+    }
+  ]
+}

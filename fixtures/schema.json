@@ -1,0 +1,239 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:curly-message:lint:fixture",
+  "title": "Curly Message Format linter fixture file",
+  "description": "One file of the linter's fixture set: cases of one kind, each an input and the findings a linter answers for it. README.md beside this schema states what each field means and what a runner does with it.",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/messageFile" },
+    { "$ref": "#/$defs/entriesFile" },
+    { "$ref": "#/$defs/readFile" }
+  ],
+  "$defs": {
+    "file": {
+      "type": "object",
+      "required": ["kind", "description", "cases"],
+      "properties": {
+        "$schema": { "type": "string" },
+        "kind": { "enum": ["message", "entries", "read"] },
+        "description": { "type": "string", "minLength": 1 },
+        "cases": { "type": "array", "minItems": 1 }
+      }
+    },
+    "messageFile": {
+      "allOf": [{ "$ref": "#/$defs/file" }],
+      "properties": {
+        "$schema": true,
+        "description": true,
+        "kind": { "const": "message" },
+        "cases": { "items": { "$ref": "#/$defs/messageCase" } }
+      },
+      "additionalProperties": false
+    },
+    "entriesFile": {
+      "allOf": [{ "$ref": "#/$defs/file" }],
+      "properties": {
+        "$schema": true,
+        "description": true,
+        "kind": { "const": "entries" },
+        "cases": { "items": { "$ref": "#/$defs/entriesCase" } }
+      },
+      "additionalProperties": false
+    },
+    "readFile": {
+      "allOf": [{ "$ref": "#/$defs/file" }],
+      "properties": {
+        "$schema": true,
+        "description": true,
+        "kind": { "const": "read" },
+        "cases": { "items": { "$ref": "#/$defs/readCase" } }
+      },
+      "additionalProperties": false
+    },
+    "name": {
+      "description": "What the case shows, unique within its file.",
+      "type": "string",
+      "minLength": 1
+    },
+    "offset": {
+      "description": "An offset in UTF-16 code units.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "code": {
+      "enum": [
+        "unclosed-placeholder", "unknown-modifier", "missing-options", "nesting-limit", "default-case", "duplicate-option", "unreachable-option", "unknown-category", "inert-escape", "bare-count",
+        "unused-category", "missing-category", "keyed-category",
+        "unreadable-catalogue", "duplicate-id", "duplicate-locale", "missing-source", "missing-message", "orphan-message", "parameter-mismatch", "modifier-mismatch", "missing-number-key"
+      ]
+    },
+    "finding": {
+      "description": "A finding: its rule's code and severity, the section of the specification the rule rests on where it rests on one, its text, and the span it is about, from `start` to `end`. A span of 0 to 0 is about the whole message.",
+      "type": "object",
+      "required": ["code", "severity", "message", "start", "end"],
+      "properties": {
+        "code": { "$ref": "#/$defs/code" },
+        "severity": { "enum": ["error", "warning"] },
+        "section": { "type": "string", "pattern": "^[0-9]+(\\.[0-9]+)?$" },
+        "message": { "type": "string", "minLength": 1 },
+        "start": { "$ref": "#/$defs/offset" },
+        "end": { "$ref": "#/$defs/offset" }
+      }
+    },
+    "modifiers": {
+      "description": "The names of the modifiers the host registers.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "intl": {
+      "description": "Whether the host satisfies the Intl level; it does where this is absent.",
+      "type": "boolean"
+    },
+    "category": { "enum": ["zero", "one", "two", "few", "many", "other"] },
+    "rules": {
+      "description": "A locale's plural rules of one type: the categories they answer, and the probes each category other than `other` takes. A probe listed under no category takes `other`. Each category of `select` is one of `categories`, and no probe is listed under two; README.md states what a runner checks beyond this schema.",
+      "type": "object",
+      "required": ["categories", "select"],
+      "properties": {
+        "categories": {
+          "description": "Every category the rules answer, `other` among them.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/category" },
+          "uniqueItems": true,
+          "contains": { "const": "other" }
+        },
+        "select": {
+          "type": "object",
+          "propertyNames": { "enum": ["zero", "one", "two", "few", "many"] },
+          "additionalProperties": {
+            "type": "array",
+            "items": { "type": "number" },
+            "uniqueItems": true
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "plurals": {
+      "description": "The host's plural rules, by the key of a locale tag: its text with A-Z lowered and `_` read as `-`. A locale or a type of rules not listed is one the host has no rules for.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[^A-Z_]*$" },
+      "additionalProperties": {
+        "type": "object",
+        "minProperties": 1,
+        "properties": {
+          "cardinal": { "$ref": "#/$defs/rules" },
+          "ordinal": { "$ref": "#/$defs/rules" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "messageCase": {
+      "description": "One message, linted alone, with the options a host gives.",
+      "type": "object",
+      "required": ["name", "message", "findings"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "message": { "type": "string" },
+        "options": {
+          "type": "object",
+          "properties": {
+            "locale": { "type": "string" },
+            "modifiers": { "$ref": "#/$defs/modifiers" },
+            "intl": { "$ref": "#/$defs/intl" }
+          },
+          "additionalProperties": false
+        },
+        "plurals": { "$ref": "#/$defs/plurals" },
+        "findings": {
+          "description": "Every finding, in the order README.md states: by start, end, code, then message.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding", "unevaluatedProperties": false }
+        }
+      },
+      "additionalProperties": false
+    },
+    "entriesCase": {
+      "description": "An ordered list of messages, linted as one catalogue.",
+      "type": "object",
+      "required": ["name", "entries", "findings"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "entries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["locale", "id", "message"],
+            "properties": {
+              "locale": { "type": "string" },
+              "id": { "type": "string" },
+              "message": { "type": "string" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "options": {
+          "type": "object",
+          "properties": {
+            "source": { "type": "string" },
+            "locales": { "type": "array", "items": { "type": "string" } },
+            "modifiers": { "$ref": "#/$defs/modifiers" },
+            "intl": { "$ref": "#/$defs/intl" }
+          },
+          "additionalProperties": false
+        },
+        "plurals": { "$ref": "#/$defs/plurals" },
+        "findings": {
+          "description": "Every finding, in the order README.md states: by entry, start, end, code, then message. `entry` is the index in `entries` of the message a finding is in.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding",
+            "required": ["entry"],
+            "properties": { "entry": { "type": "integer", "minimum": 0 } },
+            "unevaluatedProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "readCase": {
+      "description": "The text of a catalogue file, read.",
+      "type": "object",
+      "required": ["name", "text", "strings", "findings"],
+      "properties": {
+        "name": { "$ref": "#/$defs/name" },
+        "text": { "type": "string" },
+        "strings": {
+          "description": "The strings reading the file yields, in the order the file holds them, none where it stops being readable.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["path", "value", "start", "end"],
+            "properties": {
+              "path": {
+                "description": "The member names and array indices, as decimal text, that lead to the string.",
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "value": { "type": "string" },
+              "start": { "$ref": "#/$defs/offset", "description": "Where the opening quote stands." },
+              "end": { "$ref": "#/$defs/offset", "description": "Where the closing quote ends." },
+              "offsets": {
+                "description": "Where the code unit at each index of the value is written in the text, past any escape sequence that spells it, and last, at the index of the value's length, where the closing quote stands.",
+                "type": "array",
+                "items": { "$ref": "#/$defs/offset" }
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "findings": {
+          "description": "Every finding, in the order README.md states: where the file stops being readable, or each member a later one of the same name replaces.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/finding", "unevaluatedProperties": false }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "$schema": "../schema.json",
+  "kind": "read",
+  "description": "A member a later one of the same name replaces.",
+  "cases": [
+    {
+      "name": "a later member replaces an earlier one",
+      "text": "{\"a\": \"first\", \"b\": \"kept\", \"a\": {\"x\": \"second\"}}",
+      "strings": [
+        {
+          "path": ["b"],
+          "value": "kept",
+          "start": 20,
+          "end": 26
+        },
+        {
+          "path": ["a", "x"],
+          "value": "second",
+          "start": 39,
+          "end": 47
+        }
+      ],
+      "findings": [
+        {
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`a` is defined again later in this object, so this value is never read.",
+          "start": 1,
+          "end": 4
+        }
+      ]
+    },
+    {
+      "name": "every string a replaced member held is dropped, at any depth, however often it is replaced",
+      "text": "{\"a\": {\"b\": \"x\", \"b\": \"y\"}, \"a\": \"z\", \"c\": {\"d\": \"w\", \"d\": \"v\", \"d\": \"u\"}}",
+      "strings": [
+        {
+          "path": ["a"],
+          "value": "z",
+          "start": 33,
+          "end": 36
+        },
+        {
+          "path": ["c", "d"],
+          "value": "u",
+          "start": 69,
+          "end": 72
+        }
+      ],
+      "findings": [
+        {
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`a` is defined again later in this object, so this value is never read.",
+          "start": 1,
+          "end": 4
+        },
+        {
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`b` is defined again later in this object, so this value is never read.",
+          "start": 7,
+          "end": 10
+        },
+        {
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`d` is defined again later in this object, so this value is never read.",
+          "start": 44,
+          "end": 47
+        },
+        {
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`d` is defined again later in this object, so this value is never read.",
+          "start": 54,
+          "end": 57
+        }
+      ]
+    }
+  ]
+}

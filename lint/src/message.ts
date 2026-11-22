@@ -1,8 +1,8 @@
-import { categoriesOf, CATEGORIES, isCategory, numberOf } from './plural';
-import type { RuleType } from './plural';
+import { categoriesOf, CATEGORIES, intlPlurals, isCategory, numberOf } from './plural';
+import type { Plurals, RuleType } from './plural';
 import { read } from './tree';
 import type { Placeholder, Segment, Tree } from './tree';
-import { SEVERITY } from './rules';
+import { RANK, SEVERITY } from './rules';
 import type { Code, Finding, MessageOptions } from './types';
 
 /** The modifiers section 11 defines, which a host may replace by name. */
@@ -24,6 +24,12 @@ const MAX_NESTING = 8;
 
 /** The placeholders written no deeper than resolution goes. */
 export const resolvable = (tree: Tree) => tree.placeholders.filter(({ depth }) => depth <= MAX_NESTING);
+
+/**
+ * The order of findings: by where each starts, then where it ends, then its
+ * rule's place in `RULES`, then its text, by UTF-16 code units.
+ */
+export const byPlace = (a: Finding, b: Finding) => a.start - b.start || a.end - b.end || RANK[a.code] - RANK[b.code] || (a.message < b.message ? -1 : a.message > b.message ? 1 : 0);
 
 export const finding = (code: Code, section: string | undefined, message: string, start: number, end: number): Finding => ({ code, severity: SEVERITY[code], message, ...(section ? { section } : {}), start, end });
 
@@ -83,14 +89,17 @@ const ahead = (text: string, pattern: RegExp) => {
 
 const spelling = (message: string, { start, end }: { start: number, end: number }) => quoted(message.slice(start, end));
 
+/** Lints one message as `lintMessage` does, with the plural rules `plurals` has. */
+export const lintMessageWith = (plurals: Plurals) => (message: string, options: MessageOptions = {}): Finding[] => lintTree(message, read(message), options, plurals);
+
 /**
  * Lints one message: everything its text decides, and, given its locale, what
  * the locale's plural rules decide as well.
  */
-export const lintMessage = (message: string, options: MessageOptions = {}): Finding[] => lintTree(message, read(message), options);
+export const lintMessage = lintMessageWith(intlPlurals);
 
-/** Lints a message `read` has read. */
-export const lintTree = (message: string, tree: Tree, options: MessageOptions = {}): Finding[] => {
+/** Lints a message `read` has read, with the plural rules `plurals` has. */
+export const lintTree = (message: string, tree: Tree, options: MessageOptions, plurals: Plurals): Finding[] => {
   const hosted = options.modifiers ?? [];
   const defined = definedBy(options.intl);
   const placeholders = resolvable(tree);
@@ -209,7 +218,7 @@ export const lintTree = (message: string, tree: Tree, options: MessageOptions = 
 
     if (reading.name === 'plural' || reading.name === 'ordinal') {
       if (key && reading.name === 'plural') counted.add(key.name);
-      plurals(placeholder, reading.name, choices, options.locale, add);
+      selection(placeholder, reading.name, choices, options.locale, plurals, add);
     }
   }
 
@@ -219,10 +228,10 @@ export const lintTree = (message: string, tree: Tree, options: MessageOptions = 
     add(finding('bare-count', '11.5', `${spelling(message, node)} shows the value as it is written, while \`plural\` selects by the number \`number\` would show, and the two part over \`1.0\` or \`1.999\`. Write the count with \`:number\`.`, node.start, node.end));
   }
 
-  return findings.sort((a, b) => a.start - b.start || a.end - b.end);
+  return findings.sort(byPlace);
 };
 
-const plurals = (placeholder: Placeholder, modifier: string, choices: Segment[], locale: string | undefined, add: (found: Finding) => void) => {
+const selection = (placeholder: Placeholder, modifier: string, choices: Segment[], locale: string | undefined, plurals: Plurals, add: (found: Finding) => void) => {
   const type: RuleType = modifier === 'ordinal' ? 'ordinal' : 'cardinal';
 
   for (const choice of choices) {
@@ -240,7 +249,7 @@ const plurals = (placeholder: Placeholder, modifier: string, choices: Segment[],
     }
   }
 
-  const categories = locale ? categoriesOf(locale, type) : undefined;
+  const categories = locale ? categoriesOf(locale, type, plurals) : undefined;
 
   if (!locale || !categories) return;
 

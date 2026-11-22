@@ -1,0 +1,211 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "An id defined twice in one locale.",
+  "cases": [
+    {
+      "name": "a dotted key and a nested one that join to one id",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "a.b",
+          "message": "X"
+        },
+        {
+          "locale": "en",
+          "id": "a.b",
+          "message": "Yy"
+        }
+      ],
+      "options": {
+        "locales": ["en"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`a.b` is defined again in `en`, so one of the two messages is never read.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "an id under two spellings of one locale with different text",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "hi",
+          "message": "Hi {{name}}"
+        },
+        {
+          "locale": "en-US",
+          "id": "hi",
+          "message": "Hi"
+        }
+      ],
+      "options": {
+        "locales": ["en-us", "en-US"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`hi` is also defined in `en-us`, the same locale written another way, so a host that reads the two as one never reads one of the two messages.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 1,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en-US` is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "an id under two spellings, then again under the second",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "hi",
+          "message": "a"
+        },
+        {
+          "locale": "en-US",
+          "id": "hi",
+          "message": "b"
+        },
+        {
+          "locale": "en-US",
+          "id": "hi",
+          "message": "c"
+        }
+      ],
+      "findings": [
+        {
+          "entry": 1,
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`hi` is also defined in `en-us`, the same locale written another way, so a host that reads the two as one never reads one of the two messages.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 1,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en-US` is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 2,
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`hi` is defined again in `en-US`, so one of the two messages is never read.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "an id the second spelling defines first, with the same text",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "a",
+          "message": "x"
+        },
+        {
+          "locale": "en-US",
+          "id": "b",
+          "message": "y"
+        },
+        {
+          "locale": "en-us",
+          "id": "b",
+          "message": "y"
+        },
+        {
+          "locale": "en-us",
+          "id": "a",
+          "message": "x"
+        }
+      ],
+      "findings": [
+        {
+          "entry": 1,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en-US` is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 3,
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`a` is defined again in `en-us`, so one of the two messages is never read.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "an id the second spelling defines first, with other text",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "a",
+          "message": "x"
+        },
+        {
+          "locale": "en-US",
+          "id": "b",
+          "message": "y"
+        },
+        {
+          "locale": "en-us",
+          "id": "b",
+          "message": "z"
+        },
+        {
+          "locale": "en-us",
+          "id": "a",
+          "message": "x"
+        }
+      ],
+      "findings": [
+        {
+          "entry": 1,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en-US` is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 2,
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`b` is also defined in `en-US`, the same locale written another way, so a host that reads the two as one never reads one of the two messages.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 3,
+          "code": "duplicate-id",
+          "severity": "error",
+          "message": "`a` is defined again in `en-us`, so one of the two messages is never read.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    }
+  ]
+}

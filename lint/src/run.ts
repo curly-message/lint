@@ -6,7 +6,8 @@ import type { Entry } from './catalogue';
 import { hidden, readPattern, tagOf } from './locale';
 import type { Pattern, Placed, Reader, Reading } from './locale';
 import { lintMessage } from './message';
-import { readCatalogue } from './read';
+import { intlPlurals } from './plural';
+import { readCatalogue, readFindings } from './read';
 import type { Located } from './read';
 import { localeKey } from './tag';
 import type { Finding, Severity } from './types';
@@ -431,19 +432,16 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
     if (locale) locales.add(locale);
     else unplaced += 1;
 
-    if (!read.ok) {
-      const { line, column } = at(read.offset);
+    for (const found of readFindings(read)) {
+      const from = at(found.start);
+      const to = at(found.end);
 
-      problems.push({ file, line, column, endLine: line, endColumn: column, severity: 'error', code: 'unreadable-catalogue', message: `${read.message}.` });
-      if (locale) unknown.add(namespace.join('.'));
-      continue;
+      problems.push({ file, line: from.line, column: from.column, endLine: to.line, endColumn: to.column, severity: found.severity, code: found.code, message: found.message });
     }
 
-    for (const { path: key, start, end } of read.replaced) {
-      const from = at(start);
-      const to = at(end);
-
-      problems.push({ file, line: from.line, column: from.column, endLine: to.line, endColumn: to.column, severity: 'error', code: 'duplicate-id', message: `\`${key.at(-1)}\` is defined again later in this object, so this value is never read.` });
+    if (!read.ok) {
+      if (locale) unknown.add(namespace.join('.'));
+      continue;
     }
 
     for (const located of read.strings) {
@@ -477,7 +475,7 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
   // message is compared only where what both locales hold is known.
   const comparing = comparable && ((id: string) => !under(unknown, id));
 
-  for (const found of lintEntriesComparing(entries, { modifiers, intl, source, locales: [...locales] }, comparing)) {
+  for (const found of lintEntriesComparing(entries, { modifiers, intl, source, locales: [...locales] }, comparing, intlPlurals)) {
     report(sources[found.entry], found, { locale: found.locale, id: found.id });
   }
 

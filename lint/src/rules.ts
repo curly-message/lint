@@ -38,4 +38,7 @@ export const RULES: readonly Rule[] = [
   { code: 'missing-number-key', severity: 'warning', scope: 'catalogue', section: '11.5', description: 'A number key the source locale\'s selection has and another\'s lacks.' },
 ];
 
+/** Where each rule stands in `RULES`, which orders findings of one span. */
+export const RANK = Object.fromEntries(RULES.map(({ code }, index) => [code, index])) as Record<Code, number>;
+
 export const SEVERITY = Object.fromEntries(RULES.map(({ code, severity }) => [code, severity])) as Record<Code, Severity>;

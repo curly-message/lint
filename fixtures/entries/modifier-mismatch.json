@@ -1,0 +1,117 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "A parameter shown with another modifier than in the source locale (section 11).",
+  "cases": [
+    {
+      "name": "a parameter shown with `date`, then as it is",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "at",
+          "message": "Sent {{at:date}}"
+        },
+        {
+          "locale": "cs",
+          "id": "at",
+          "message": "Odesl\u00e1no {{at}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "modifier-mismatch",
+          "severity": "warning",
+          "section": "11",
+          "message": "`at` is shown as it is here and with `date` in the `en` message.",
+          "start": 9,
+          "end": 15
+        }
+      ]
+    },
+    {
+      "name": "a parameter shown inside a selection by it",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "n",
+          "message": "Liked by {{count:number}} people"
+        },
+        {
+          "locale": "cs",
+          "id": "n",
+          "message": "L\u00edb\u00ed se {{count:plural; one:{{count:number}} \u010dlov\u011bku; few:{{count:number}} lidem; many:{{count:number}} \u010dlov\u011bka; other:{{count:number}} lidem;}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "plurals": {
+        "cs": {
+          "cardinal": {
+            "categories": ["few", "many", "one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001],
+              "few": [2, 3, 4, -2, -3, -4, 2.001, 3.001, 4.001, -2.001, -3.001, -4.001],
+              "many": [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5, 18.5, 19.5, 20.5, -0.5, -1.5, -2.5, -3.5, -4.5, -5.5, -6.5, -7.5, -8.5, -9.5, -10.5, -11.5, -12.5, -13.5, -14.5, -15.5, -16.5, -17.5, -18.5, -19.5, -20.5]
+            }
+          }
+        }
+      },
+      "findings": []
+    },
+    {
+      "name": "a parameter only selected by",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "n",
+          "message": "{{n:number}} files"
+        },
+        {
+          "locale": "cs",
+          "id": "n",
+          "message": "{{n; 1:jeden soubor; default:soubory}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "findings": []
+    },
+    {
+      "name": "a parameter selected by in both, with other modifiers",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "n",
+          "message": "{{n; 1:file; default:files;}}"
+        },
+        {
+          "locale": "cs",
+          "id": "n",
+          "message": "{{n:plural; one:soubor; few:soubory; many:souboru; other:soubor\u016f;}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "plurals": {
+        "cs": {
+          "cardinal": {
+            "categories": ["few", "many", "one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001],
+              "few": [2, 3, 4, -2, -3, -4, 2.001, 3.001, 4.001, -2.001, -3.001, -4.001],
+              "many": [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5, 18.5, 19.5, 20.5, -0.5, -1.5, -2.5, -3.5, -4.5, -5.5, -6.5, -7.5, -8.5, -9.5, -10.5, -11.5, -12.5, -13.5, -14.5, -15.5, -16.5, -17.5, -18.5, -19.5, -20.5]
+            }
+          }
+        }
+      },
+      "findings": []
+    }
+  ]
+}

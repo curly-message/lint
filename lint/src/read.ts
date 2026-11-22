@@ -1,3 +1,6 @@
+import { byPlace, finding, quoted } from './message';
+import type { Finding } from './types';
+
 /** A string a catalogue file holds, where it stands in the file. */
 export type Located = {
   /** The path to the string: member names and array indices. */
@@ -279,3 +282,12 @@ export const readCatalogue = (text: string): Read => {
     throw error;
   }
 };
+
+/**
+ * The findings reading a catalogue file yields, located by UTF-16 code units
+ * of its text: where the file stops being readable, or each member a later
+ * one of the same name replaces.
+ */
+export const readFindings = (read: Read): Finding[] => (read.ok
+  ? read.replaced.map(({ path, start, end }) => finding('duplicate-id', undefined, `${quoted(path.at(-1) as string)} is defined again later in this object, so this value is never read.`, start, end)).sort(byPlace)
+  : [finding('unreadable-catalogue', undefined, `${read.message}.`, read.offset, read.offset)]);

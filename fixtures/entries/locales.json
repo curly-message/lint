@@ -1,0 +1,227 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "Locale tags told apart without regard to case, with `_` read as `-`, and no alias resolved.",
+  "cases": [
+    {
+      "name": "the source written `en-US`",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "hi",
+          "message": "Hi"
+        },
+        {
+          "locale": "en-us",
+          "id": "bye",
+          "message": "Bye"
+        },
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        }
+      ],
+      "options": {
+        "source": "en-US",
+        "locales": ["en-us", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`cs` has no message `bye`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "the source written `EN_us`",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "hi",
+          "message": "Hi"
+        },
+        {
+          "locale": "en-us",
+          "id": "bye",
+          "message": "Bye"
+        },
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        }
+      ],
+      "options": {
+        "source": "EN_us",
+        "locales": ["en-us", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`cs` has no message `bye`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "the source written `en-us`",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "hi",
+          "message": "Hi"
+        },
+        {
+          "locale": "en-us",
+          "id": "bye",
+          "message": "Bye"
+        },
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        }
+      ],
+      "options": {
+        "source": "en-us",
+        "locales": ["en-us", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`cs` has no message `bye`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "`EN` is `en`",
+      "entries": [
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj {{x}}"
+        },
+        {
+          "locale": "EN",
+          "id": "hi",
+          "message": "Hi"
+        }
+      ],
+      "options": {
+        "locales": ["cs", "EN"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "parameter-mismatch",
+          "severity": "error",
+          "section": "9.2",
+          "message": "`x` is read here and never in the `EN` message, so a payload written for that message does not carry it.",
+          "start": 5,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "a locale of `locales` written another way",
+      "entries": [
+        {
+          "locale": "en-US",
+          "id": "hi",
+          "message": "Hi"
+        }
+      ],
+      "options": {
+        "locales": ["EN-us", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`EN-us`, under which no message was read, is `en-US` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 0,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`cs` has no message `hi`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "an alias is another locale",
+      "entries": [
+        {
+          "locale": "iw",
+          "id": "hi",
+          "message": "Hi {{x}}"
+        },
+        {
+          "locale": "he",
+          "id": "hi",
+          "message": "Hi"
+        }
+      ],
+      "options": {
+        "locales": ["iw", "he"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "parameter-mismatch",
+          "severity": "error",
+          "section": "9.2",
+          "message": "This message never reads `x`, which the `iw` message reads.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a tag with a region is another locale",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "hi",
+          "message": "Hi {{x}}"
+        },
+        {
+          "locale": "en-US",
+          "id": "hi",
+          "message": "Hi"
+        }
+      ],
+      "options": {
+        "locales": ["en", "en-US"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "parameter-mismatch",
+          "severity": "error",
+          "section": "9.2",
+          "message": "This message never reads `x`, which the `en` message reads.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    }
+  ]
+}

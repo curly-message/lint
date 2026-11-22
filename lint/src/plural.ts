@@ -48,9 +48,29 @@ const supported = (locale: string) => {
   }
 };
 
+/** A locale's plural rules of one type: the categories they answer, and the one a number takes. */
+export type Rules = { categories: readonly Category[], select: (number: number) => Category };
+
+/**
+ * The plural rules a host has for a locale, asked by its key (`localeKey`),
+ * and none where it has no rules for it.
+ */
+export type Plurals = (tag: string, type: RuleType) => Rules | undefined;
+
+/** The rules of the host's `Intl.PluralRules`. */
+export const intlPlurals: Plurals = (tag, type) => {
+  if (!supported(tag)) return undefined;
+
+  // `plural` shows at most two fraction digits by default, and selects by
+  // what it shows (section 11.5).
+  const rules = new Intl.PluralRules(tag, type === 'cardinal' ? { type, maximumFractionDigits: 2 } : { type });
+
+  return { categories: rules.resolvedOptions().pluralCategories, select: (number) => rules.select(number) };
+};
+
 export type Categories = Map<Category, number[]>;
 
-const known = new Map<string, Categories | undefined>();
+const known = new WeakMap<Plurals, Map<string, Categories | undefined>>();
 
 /**
  * The categories a locale's rules answer, each with the numbers among a set
@@ -58,20 +78,23 @@ const known = new Map<string, Categories | undefined>();
  * locale. A locale may be written with `_`, as a path or a POSIX locale
  * writes it, for `-`.
  */
-export const categoriesOf = (locale: string, type: RuleType): Categories | undefined => {
+export const categoriesOf = (locale: string, type: RuleType, plurals: Plurals): Categories | undefined => {
   const tag = localeKey(locale);
   const cached = `${type} ${tag}`;
+  let asked = known.get(plurals);
 
-  if (known.has(cached)) return known.get(cached);
+  if (!asked) {
+    asked = new Map();
+    known.set(plurals, asked);
+  }
 
+  if (asked.has(cached)) return asked.get(cached);
+
+  const rules = plurals(tag, type);
   let answer: Categories | undefined;
 
-  if (supported(tag)) {
-    // `plural` shows at most two fraction digits by default, and selects by
-    // what it shows (section 11.5).
-    const rules = new Intl.PluralRules(tag, type === 'cardinal' ? { type, maximumFractionDigits: 2 } : { type });
-
-    answer = new Map(rules.resolvedOptions().pluralCategories.map((category) => [category, []]));
+  if (rules) {
+    answer = new Map(rules.categories.map((category) => [category, []]));
 
     for (const probe of PROBES) {
       if (type === 'ordinal' && !Number.isInteger(probe)) continue;
@@ -80,7 +103,7 @@ export const categoriesOf = (locale: string, type: RuleType): Categories | undef
     }
   }
 
-  known.set(cached, answer);
+  asked.set(cached, answer);
 
   return answer;
 };

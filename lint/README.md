@@ -149,7 +149,9 @@ what is wrong and what happens instead, the `section` of the specification it
 rests on where one does, and `start` and `end`, a range of UTF-16 code units in
 the message. A finding in a catalogue also names its message's `locale` and
 `id`. One about a whole message — one a catalogue has and another lacks, or
-one defined twice — spans nothing, from 0 to 0.
+one defined twice — spans nothing, from 0 to 0. Findings come in one order:
+by `entry` in a catalogue, then by `start`, then by `end`, then by their
+rule's place in `RULES`, then by `message`, comparing UTF-16 code units.
 
 ## Rules
 

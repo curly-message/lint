@@ -1,0 +1,108 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "A plural category with no option, every count of which has a number key (section 11.5).",
+  "cases": [
+    {
+      "name": "a number key for the one count of English `one`",
+      "message": "{{n:plural; 1:one file; other:files;}}",
+      "options": {
+        "locale": "en"
+      },
+      "plurals": {
+        "en": {
+          "cardinal": {
+            "categories": ["one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001]
+            }
+          }
+        }
+      },
+      "findings": [
+        {
+          "code": "keyed-category",
+          "severity": "warning",
+          "section": "11.5",
+          "message": "Every count `en` puts in `one` has a number key, but -1, 1.001 and -1.001 fall there too, and this selection has no `one` option, so those take the fallback chain.",
+          "start": 4,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "number keys beside a category of English",
+      "message": "{{n:plural; 0:none; 1:one file; other:files;}}",
+      "options": {
+        "locale": "en"
+      },
+      "plurals": {
+        "en": {
+          "cardinal": {
+            "categories": ["one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001]
+            }
+          }
+        }
+      },
+      "findings": [
+        {
+          "code": "keyed-category",
+          "severity": "warning",
+          "section": "11.5",
+          "message": "Every count `en` puts in `one` has a number key, but -1, 1.001 and -1.001 fall there too, and this selection has no `one` option, so those take the fallback chain.",
+          "start": 4,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "number keys for 2, 3 and 4, which Czech puts alone in `few`",
+      "message": "{{n:plural; 2:a; 3:b; 4:c; one:x; many:y; other:z;}}",
+      "options": {
+        "locale": "cs"
+      },
+      "plurals": {
+        "cs": {
+          "cardinal": {
+            "categories": ["few", "many", "one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001],
+              "few": [2, 3, 4, -2, -3, -4, 2.001, 3.001, 4.001, -2.001, -3.001, -4.001],
+              "many": [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5, 18.5, 19.5, 20.5, -0.5, -1.5, -2.5, -3.5, -4.5, -5.5, -6.5, -7.5, -8.5, -9.5, -10.5, -11.5, -12.5, -13.5, -14.5, -15.5, -16.5, -17.5, -18.5, -19.5, -20.5]
+            }
+          }
+        }
+      },
+      "findings": [
+        {
+          "code": "keyed-category",
+          "severity": "warning",
+          "section": "11.5",
+          "message": "Every count `cs` puts in `few` has a number key, but -2, -3 and -4 fall there too, and this selection has no `few` option, so those take the fallback chain.",
+          "start": 4,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "a number key beside the category",
+      "message": "{{n:plural; 1:one file; one:file; other:files;}}",
+      "options": {
+        "locale": "en"
+      },
+      "plurals": {
+        "en": {
+          "cardinal": {
+            "categories": ["one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001]
+            }
+          }
+        }
+      },
+      "findings": []
+    }
+  ]
+}

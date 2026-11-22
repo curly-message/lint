@@ -1,0 +1,133 @@
+{
+  "$schema": "../schema.json",
+  "kind": "read",
+  "description": "A file read only up to where it stops being readable.",
+  "cases": [
+    {
+      "name": "stops being JSON at 6: \"{\\\"a\\\": }\"",
+      "text": "{\"a\": }",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "Expected a value, found `}`.",
+          "start": 6,
+          "end": 6
+        }
+      ]
+    },
+    {
+      "name": "stops being JSON at 10: \"{\\\"a\\\": \\\"b\\\",}\"",
+      "text": "{\"a\": \"b\",}",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "Expected a string, found `}`.",
+          "start": 10,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "stops being JSON at 11: \"{\\\"a\\\": \\\"b\\\"} x\"",
+      "text": "{\"a\": \"b\"} x",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "Expected the end of the file, found `x`.",
+          "start": 11,
+          "end": 11
+        }
+      ]
+    },
+    {
+      "name": "stops being JSON at 8: \"{\\\"a\\\": \\\"b\\nc\\\"}\"",
+      "text": "{\"a\": \"b\nc\"}",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "Expected a control character to be escaped, found U+000A.",
+          "start": 8,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "name": "stops being JSON at 0: \"\"",
+      "text": "",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "Expected a value, found the end of the file.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a line feed in a string, named by its code point",
+      "text": "{\"a\": \"x\ny\"}",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "Expected a control character to be escaped, found U+000A.",
+          "start": 8,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "name": "a line separator, named by its code point",
+      "text": "{\"a\": \u2028}",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "Expected a value, found U+2028.",
+          "start": 6,
+          "end": 6
+        }
+      ]
+    },
+    {
+      "name": "a character outside the Basic Multilingual Plane, shown whole",
+      "text": "{\"a\": \ud83d\ude00}",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "Expected a value, found `\ud83d\ude00`.",
+          "start": 6,
+          "end": 6
+        }
+      ]
+    },
+    {
+      "name": "an array nested 513 levels deep",
+      "text": "[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[\"x\"]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]",
+      "strings": [],
+      "findings": [
+        {
+          "code": "unreadable-catalogue",
+          "severity": "error",
+          "message": "The catalogue nests deeper than 512 levels.",
+          "start": 512,
+          "end": 512
+        }
+      ]
+    }
+  ]
+}

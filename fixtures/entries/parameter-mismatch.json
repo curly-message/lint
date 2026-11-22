@@ -1,0 +1,45 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "A message that reads other parameters than the source locale's (section 9.2).",
+  "cases": [
+    {
+      "name": "a message reading other parameters than the source",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "hi",
+          "message": "Hello, {{name}}!"
+        },
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj, {{jmeno}}!"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "parameter-mismatch",
+          "severity": "error",
+          "section": "9.2",
+          "message": "This message never reads `name`, which the `en` message reads.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 1,
+          "code": "parameter-mismatch",
+          "severity": "error",
+          "section": "9.2",
+          "message": "`jmeno` is read here and never in the `en` message, so a payload written for that message does not carry it.",
+          "start": 6,
+          "end": 15
+        }
+      ]
+    }
+  ]
+}

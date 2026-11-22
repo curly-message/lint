@@ -1,0 +1,66 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "A message the source locale has and another locale lacks.",
+  "cases": [
+    {
+      "name": "a locale with no message lacks every one",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "hi",
+          "message": "Hello"
+        },
+        {
+          "locale": "en",
+          "id": "bye",
+          "message": "Bye"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`cs` has no message `hi`.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 1,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`cs` has no message `bye`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a locale of `locales` with no message",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "hi",
+          "message": "Hello"
+        }
+      ],
+      "options": {
+        "locales": ["cs"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`cs` has no message `hi`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    }
+  ]
+}
