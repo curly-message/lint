@@ -17,6 +17,7 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 | --- | --- | --- |
 | [`lint/`](./lint) | `@curly-message/lint` | The rules, a library over them, and the `curly-lint` command for JSON catalogues. |
 | [`eslint-plugin/`](./eslint-plugin) | `@curly-message/eslint-plugin` | The rules a single message decides, as ESLint rules, for JSON and for messages in JavaScript and TypeScript. |
+| [`rust/`](./rust) | `curly-message-lint` | The same rules, catalogue reader and `curly-lint` command in Rust: a crate and a native program, unreleased. |
 
 The library's README lists every rule. The command line runs all of them,
 those that compare one locale with another included. The plugin runs the ones a
@@ -25,8 +26,8 @@ single message decides, since ESLint hands a rule one file at a time.
 [`fixtures/`](./fixtures) is the linter's contract as data: messages, lists of
 entries and catalogue files, each with the findings a linter answers for it,
 and the plural rules it is read with in place of the host's. The library's
-suite runs every case, and the set's README says what a runner in another
-language does with it.
+suite and the crate's each run every case, and the set's README says what a
+runner in another language does with it.
 
 Issues are filed in the family's shared tracker,
 [`curly-message/spec`](https://github.com/curly-message/spec/issues).
@@ -39,7 +40,8 @@ that touches a workspace is benchmarked against its base by `bench.yml`,
 which posts a table per workspace on the PR (a PR from a fork finds it in the
 job's summary). A count that grew, a row gone missing or changing kind, or a
 row that fails on the base fails the check unless the PR carries the
-`bench-accepted` label; adding or removing the label runs it again.
+`bench-accepted` label; adding or removing the label runs it again. The
+crate is measured the same way, by the commands its README names.
 
 ## Releasing
 
