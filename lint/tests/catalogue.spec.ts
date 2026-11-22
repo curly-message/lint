@@ -105,15 +105,17 @@ describe('a catalogue', () => {
     expect(lintCatalogue(catalogue)).toEqual([]);
   });
 
-  // A million messages take seconds to lint.
-  it('unreadable-catalogue: a tree past a million messages, read no further', { timeout: 30_000 }, () => {
+  // A million messages take seconds to lint. `en` holds `b.b...b` past where
+  // it is read, and what `cs` lacks of it is unknown: no locale is compared
+  // with another.
+  it('unreadable-catalogue: a tree past a million messages, read no further and compared with no other locale', { timeout: 30_000 }, () => {
     let doubled: unknown = 'm';
 
     for (let depth = 0; depth < 21; depth += 1) doubled = { a: doubled, b: doubled };
 
-    const found = lintCatalogue({ en: doubled });
+    const found = lintCatalogue({ en: doubled, cs: { [Array.from({ length: 21 }, () => 'b').join('.')]: 'm', open: '{{' } });
 
-    expect(found).toMatchObject([{ code: 'unreadable-catalogue', locale: 'en', entry: 999999, start: 0, end: 0 }]);
+    expect(found).toMatchObject([{ code: 'unreadable-catalogue', locale: 'en', entry: 999999, start: 0, end: 0 }, { code: 'unclosed-placeholder', locale: 'cs', id: 'open' }]);
     expect(found[0].message).toContain('1000000');
   });
 

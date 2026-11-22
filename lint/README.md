@@ -268,8 +268,8 @@ and the ESLint plugin, find nothing in such a message. What a file that is
 not JSON holds is unknown, so `curly-lint` compares no message under its
 namespace with another locale's: each is still linted with its locale, and an
 id defined twice is still reported. So with a list or a tree read only up to
-text that is not well-formed: no message read before it is compared with
-another locale's.
+text that is not well-formed, and with a catalogue a tree of which holds more
+than a million messages: no message read is compared with another locale's.
 
 #### `duplicate-id`
 
