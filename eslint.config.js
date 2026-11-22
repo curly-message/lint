@@ -21,11 +21,11 @@ const manifests = (directory) => ({
 });
 
 export default tseslint.config(
-  // Build outputs and machine-local scratch; node_modules is ignored by
-  // default. `.claude/worktrees/` is where the agent tooling checks the branch
+  // Build outputs, Cargo's among them, and machine-local scratch;
+  // node_modules is ignored by default. `.claude/worktrees/` is where the agent tooling checks the branch
   // out a second time, and linting a checkout of the repo from inside the
   // repo reports every dev dependency twice.
-  { ignores: ['**/dist/', '**/.claude/'] },
+  { ignores: ['**/dist/', '**/target/', '**/.claude/'] },
   js.configs.recommended,
   tseslint.configs.recommendedTypeChecked,
   {
