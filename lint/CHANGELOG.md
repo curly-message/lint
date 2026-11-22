@@ -51,3 +51,7 @@ Format, as a library and as the `curly-lint` command.
   compared with another locale's. `lintMessage` finds nothing in such a
   message. An unpaired surrogate in `source` or in a locale of `locales`, a
   caller's options rather than catalogue text, reads as U+FFFD.
+* **A tree handed to `lintCatalogue` is read up to a million messages**, an
+  object it holds in several places counted in each. One that holds more is
+  an `unreadable-catalogue` error on the last message read, and no message is
+  then compared with another locale's.

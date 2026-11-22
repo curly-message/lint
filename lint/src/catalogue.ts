@@ -275,20 +275,21 @@ const illFormed = (entries: readonly Entry[]) => {
 const wellFormed = <T>(text: T) => (typeof text === 'string' ? text.replace(/\p{Cs}/gu, '\ufffd') : text);
 
 // Lints the entries up to `fault`, where there is one. What the catalogue
-// holds past it is unknown, so no message is then compared with another
-// locale's, as `curly-lint` compares nothing a file that is not JSON holds.
-const lintUpTo = (entries: readonly Entry[], given: EntriesOptions, plurals: Plurals, fault: ReturnType<typeof illFormed>): CatalogueFinding[] => {
+// holds past it, or past the last of `entries` where the catalogue was `cut`
+// there, is unknown, so no message is then compared with another locale's,
+// as `curly-lint` compares nothing a file that is not JSON holds.
+const lintUpTo = (entries: readonly Entry[], given: EntriesOptions, plurals: Plurals, fault: ReturnType<typeof illFormed>, cut = false): CatalogueFinding[] => {
   // A caller's options are no catalogue text: each unpaired surrogate in one
   // reads as U+FFFD, as a command's arguments converted lossily do.
   const options = { ...given, source: wellFormed(given.source), locales: Array.isArray(given.locales) ? given.locales.map(wellFormed) : given.locales };
 
-  if (!fault) return lintEntriesComparing(entries, options, () => true, plurals);
+  if (!fault) return lintEntriesComparing(entries, options, !cut && (() => true), plurals);
 
   const { index, field, unit } = fault;
   const { locale, id } = entries[index];
   const message = `This entry's ${field} is not well-formed Unicode text: it holds the unpaired surrogate ${shown(unit)}, so the catalogue is read no further.`;
 
-  return [...lintEntriesComparing(entries.slice(0, index), options, () => false, plurals), { ...finding('unreadable-catalogue', undefined, message, 0, 0), locale, id, entry: index }];
+  return [...lintEntriesComparing(entries.slice(0, index), options, false, plurals), { ...finding('unreadable-catalogue', undefined, message, 0, 0), locale, id, entry: index }];
 };
 
 /** Lints a list of messages as `lintEntries` does, with the plural rules `plurals` has. */
@@ -352,7 +353,13 @@ const compare = (source: string, reference: Names, entry: number, names: Names, 
   }
 };
 
-/** Lints a catalogue: a tree of messages for each locale. */
+/**
+ * Lints a catalogue: a tree of messages for each locale. A tree is read up to
+ * a million messages. Where one holds more, no message is compared with
+ * another locale's, and the last message read of it is an
+ * `unreadable-catalogue` finding, unless the catalogue is read no further
+ * than text before it that is not well-formed Unicode.
+ */
 export const lintCatalogue = (catalogue: Catalogue, options: CatalogueOptions = {}): CatalogueFinding[] => {
   const locales = own(catalogue);
   const entries: Entry[] = [];
@@ -367,7 +374,7 @@ export const lintCatalogue = (catalogue: Catalogue, options: CatalogueOptions = 
   }
 
   const fault = illFormed(entries);
-  const findings = lintUpTo(entries, { ...options, locales: locales.map(([locale]) => locale) }, intlPlurals, fault);
+  const findings = lintUpTo(entries, { ...options, locales: locales.map(([locale]) => locale) }, intlPlurals, fault, cut.length > 0);
   // No message past one that is not well-formed text is read.
   const read = fault?.index ?? entries.length;
 
