@@ -169,6 +169,15 @@ a catalogue file is read once and up to 512 levels deep, and a locale's
 plural rules are asked about a fixed list of numbers, once for each locale of
 a call.
 
+## Benchmark
+
+`sh bench/prepare.sh && node bench/harness.mjs`, run from this directory,
+measures the release build: the size of the `.crate` and of the stripped
+command, the crates a build compiles, what the command asks of its host, and
+times of the library and of the command.
+`node bench/harness.mjs --compare <dir>` sets it beside the crate prepared
+the same way at `<dir>`.
+
 ## License
 
 [MIT](LICENSE). The plural rules and language aliases in `cldr/` are the

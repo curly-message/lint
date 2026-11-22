@@ -1,0 +1,19 @@
+[package]
+name = "curly-message-lint-bench"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+description = "The program the benchmark of curly-message-lint measures."
+license = "MIT"
+repository = "https://github.com/curly-message/lint"
+publish = false
+
+[dependencies]
+curly-message-lint = { path = ".." }
+
+[[bin]]
+name = "curly-message-lint-bench"
+path = "src/main.rs"
+
+[lints]
+workspace = true
