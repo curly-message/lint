@@ -89,12 +89,16 @@ const ahead = (text: string, pattern: RegExp) => {
 
 const spelling = (message: string, { start, end }: { start: number, end: number }) => quoted(message.slice(start, end));
 
+/** The first code unit of a string that pairs with no other, where the string is not well-formed Unicode text. */
+export const unpaired = (text: unknown) => (typeof text === 'string' ? /\p{Cs}/u.exec(text)?.[0] : undefined);
+
 /** Lints one message as `lintMessage` does, with the plural rules `plurals` has. */
-export const lintMessageWith = (plurals: Plurals) => (message: string, options: MessageOptions = {}): Finding[] => lintTree(message, read(message), options, plurals);
+export const lintMessageWith = (plurals: Plurals) => (message: string, options: MessageOptions = {}): Finding[] => (unpaired(message) ? [] : lintTree(message, read(message), options, plurals));
 
 /**
  * Lints one message: everything its text decides, and, given its locale, what
- * the locale's plural rules decide as well.
+ * the locale's plural rules decide as well. Text that is not well-formed
+ * Unicode, holding a surrogate that pairs with no other, has no findings.
  */
 export const lintMessage = lintMessageWith(intlPlurals);
 

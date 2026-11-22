@@ -95,9 +95,10 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 
 A file that is not JSON is an [`unreadable-catalogue`](#unreadable-catalogue)
 error at the place its reading stops, and so is one nested deeper than 512
-levels. A file or a directory the command cannot read is named on standard
-error once, with why, and the rest is still read and linted; standard output
-carries findings alone, in either format. What a file it cannot read holds is
+levels or holding a string that is not well-formed Unicode text. A file or a
+directory the command cannot read is named on standard error once, with why,
+and the rest is still read and linted; standard output carries findings
+alone, in either format. What a file it cannot read holds is
 unknown, as for a file that is not JSON: no message under its namespace is
 compared with another locale's, and the locale it would be read in counts as
 one written for. What a directory it cannot read holds is unknown too. Where
@@ -139,9 +140,9 @@ lintCatalogue({
 | --- | --- |
 | `lintMessage(message, options?)` | Lints one message. `options.locale` adds the rules a locale decides, written with `-` or `_`; `options.modifiers` names the modifiers a host registers; `options.intl: false` is a host that satisfies Core alone. |
 | `lintCatalogue(catalogue, options?)` | Lints a tree of messages for each locale: each message with its locale, then every locale against the source one. `options.source` names it. Two tags that differ only in case, or in `_` for `-`, are one locale, and a finding names each locale as the catalogue writes it. A source that is no locale of the catalogue is a [`missing-source`](#missing-source) error. |
-| `lintEntries(entries, options?)` | The same over a list of `{ locale, id, message }`, its locales matched the same way. A finding's `entry` is the index of its message in the list. `options.locales` names the locales the catalogue is written for, so one with no message yet lacks every message of the source locale. |
+| `lintEntries(entries, options?)` | The same over a list of `{ locale, id, message }`, its locales matched the same way. A finding's `entry` is the index of its message in the list. `options.locales` names the locales the catalogue is written for, so one with no message yet lacks every message of the source locale. An unpaired surrogate in `options.source` or in a locale of `options.locales` reads as U+FFFD, as a command's arguments converted lossily do. |
 | `entriesOf(catalogue)`, `flatten(tree)` | The messages a catalogue or a tree holds, in order, each string leaf by its path joined with dots, up to a million for each tree. Only an object's own enumerable data members are read, so no accessor runs, and an object a tree holds inside itself is read where it is first reached. |
-| `readCatalogue(text)` | Reads a JSON catalogue as `JSON.parse` does, past a byte order mark and up to 512 levels deep, and says where each string stands in the text, past its escape sequences, and which members a later one of the same name replaced. |
+| `readCatalogue(text)` | Reads a JSON catalogue as `JSON.parse` does, past a byte order mark, up to 512 levels deep and up to a string that is not well-formed Unicode text, and says where each string stands in the text, past its escape sequences, and which members a later one of the same name replaced. |
 | `RULES` | Every rule: its code, severity, scope and the section of the specification it rests on. |
 
 A finding carries its `code`, its `severity`, an English `message` saying
@@ -258,9 +259,17 @@ Error. A catalogue the linter cannot read in full: a file that is not JSON,
 or is nested deeper than 512 levels, reported where its reading stops, and a
 tree handed to `lintCatalogue` that holds more than a million messages — an
 object it holds in several places counted in each — reported on the last
-message read. What a file that is not JSON holds is unknown, so `curly-lint`
-compares no message under its namespace with another locale's: each is still
-linted with its locale, and an id defined twice is still reported.
+message read. Text that is not well-formed Unicode, holding a surrogate that
+pairs with no other, is no message and no id: a file is read up to the first
+such string, escaped or not, reported where that surrogate is written, and a
+list handed to `lintEntries`, or a tree to `lintCatalogue`, up to the first
+message whose locale, id or text is such text, reported on it. `lintMessage`,
+and the ESLint plugin, find nothing in such a message. What a file that is
+not JSON holds is unknown, so `curly-lint` compares no message under its
+namespace with another locale's: each is still linted with its locale, and an
+id defined twice is still reported. So with a list or a tree read only up to
+text that is not well-formed: no message read before it is compared with
+another locale's.
 
 #### `duplicate-id`
 

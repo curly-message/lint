@@ -42,3 +42,12 @@ Format, as a library and as the `curly-lint` command.
   come in one order: by `entry` in a catalogue, then by `start`, then by
   `end`, then by their rule's place in `RULES`, then by `message`, comparing
   UTF-16 code units.
+* **Text that is not well-formed Unicode**, holding a surrogate that pairs
+  with no other, is no message and no id. A catalogue is read up to the first
+  such string, as up to where it stops being JSON, with an
+  `unreadable-catalogue` error: in a file, where that surrogate is written,
+  escaped or not; in a list of entries or a tree, on the first message whose
+  locale, id or text is such text, and no message read before it is then
+  compared with another locale's. `lintMessage` finds nothing in such a
+  message. An unpaired surrogate in `source` or in a locale of `locales`, a
+  caller's options rather than catalogue text, reads as U+FFFD.

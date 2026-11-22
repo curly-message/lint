@@ -32,7 +32,7 @@ const ESCAPES: Record<string, string> = { '"': '"', '\\': '\\', '/': '/', b: '\b
 
 // A character as a report shows it: by its code point where it is invisible,
 // or would break the line the report is on.
-const shown = (char: string) => (/[\p{C}\p{Z}]/u.test(char) ? `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}` : `\`${char}\``);
+export const shown = (char: string) => (/[\p{C}\p{Z}]/u.test(char) ? `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}` : `\`${char}\``);
 
 // Where the code unit at `index` of a string's value is written: past the
 // opening quote, and past the units each escape sequence before it is
@@ -103,19 +103,39 @@ export const readCatalogue = (text: string): Read => {
     const escapes: number[] = [];
     const extra: number[] = [];
     let value = '';
+    // The high surrogate the value ends with, and where it is written, while
+    // nothing has paired it yet.
+    let pending: [string, number] | undefined;
+
+    const unpaired = ([unit, offset]: [string, number]): never => {
+      throw new Unreadable(`Expected well-formed Unicode text, found the unpaired surrogate ${shown(unit)}`, offset);
+    };
+
+    // The text stops being readable at whichever comes first: a surrogate
+    // still unpaired, or the fault found past it.
+    const stop = (what: string): never => (pending ? unpaired(pending) : fail(what));
+
+    const take = (unit: string, offset: number) => {
+      const low = unit >= '\udc00' && unit <= '\udfff';
+
+      if (pending && !low) unpaired(pending);
+      if (!pending && low) unpaired([unit, offset]);
+      pending = unit >= '\ud800' && unit <= '\udbff' ? [unit, offset] : undefined;
+      value += unit;
+    };
 
     if (text[at] !== '"') fail('Expected a string');
     at += 1;
 
     while (text[at] !== '"') {
-      if (at >= text.length) fail('Expected the string to close');
+      if (at >= text.length) stop('Expected the string to close');
 
       const char = text[at];
 
-      if (char < ' ') fail('Expected a control character to be escaped');
+      if (char < ' ') stop('Expected a control character to be escaped');
 
       if (char !== '\\') {
-        value += char;
+        take(char, at);
         at += 1;
         continue;
       }
@@ -126,14 +146,14 @@ export const readCatalogue = (text: string): Read => {
       if (kind === 'u') {
         const hex = text.slice(at + 2, at + 6);
 
-        if (!/^[0-9a-fA-F]{4}$/.test(hex)) fail('Expected four hexadecimal digits');
-        value += String.fromCharCode(parseInt(hex, 16));
+        if (!/^[0-9a-fA-F]{4}$/.test(hex)) stop('Expected four hexadecimal digits');
+        take(String.fromCharCode(parseInt(hex, 16)), at);
         width = 6;
       } else if (kind !== undefined && kind in ESCAPES) {
-        value += ESCAPES[kind];
+        take(ESCAPES[kind], at);
       } else {
         at += 1;
-        fail('Expected an escape sequence');
+        stop('Expected an escape sequence');
       }
 
       escapes.push(value.length - 1);
@@ -141,6 +161,7 @@ export const readCatalogue = (text: string): Read => {
       at += width;
     }
 
+    if (pending) unpaired(pending);
     at += 1;
 
     return { value, start, end: at, offsetOf: locator(start, value.length, escapes, extra) };

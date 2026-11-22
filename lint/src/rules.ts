@@ -27,7 +27,7 @@ export const RULES: readonly Rule[] = [
   { code: 'unused-category', severity: 'warning', scope: 'locale', section: '11.5', description: 'A plural category the locale never answers.' },
   { code: 'missing-category', severity: 'error', scope: 'locale', section: '11.5', description: 'A plural category the locale answers and the selection has no option for.' },
   { code: 'keyed-category', severity: 'warning', scope: 'locale', section: '11.5', description: 'A plural category with no option, every count of which has a number key, so only negative numbers and fractions in it take the fallback chain.' },
-  { code: 'unreadable-catalogue', severity: 'error', scope: 'catalogue', description: 'A catalogue read only up to where it is not JSON, nests past 512 levels or holds more than a million messages.' },
+  { code: 'unreadable-catalogue', severity: 'error', scope: 'catalogue', description: 'A catalogue read only up to where it is not JSON, is not well-formed Unicode text, nests past 512 levels or holds more than a million messages.' },
   { code: 'duplicate-id', severity: 'error', scope: 'catalogue', description: 'An id defined twice in one locale.' },
   { code: 'duplicate-locale', severity: 'warning', scope: 'catalogue', description: 'A locale written two ways, its tags differing only in case or `_` for `-`.' },
   { code: 'missing-source', severity: 'error', scope: 'catalogue', description: 'A source locale that is no locale of the catalogue, so no other locale is compared with it.' },

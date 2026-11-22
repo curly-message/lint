@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { entriesOf, flatten, lintCatalogue, lintEntries } from '@curly-message/lint';
+import { entriesOf, flatten, lintCatalogue, lintEntries, lintMessage } from '@curly-message/lint';
 
 const codes = (found: ReturnType<typeof lintCatalogue>) => found.map(({ code, locale, id }) => `${code} ${locale} ${id}`);
 
@@ -117,6 +117,29 @@ describe('a catalogue', () => {
     expect(found[0].message).toContain('1000000');
   });
 
+  it('unreadable-catalogue: an entry that is not well-formed Unicode text, read no further', () => {
+    // `cs` reads no `x`, which no finding says: what the catalogue holds past
+    // where its reading stops is unknown, so no locale is compared with
+    // another, as `curly-lint` compares nothing a file that is not JSON holds.
+    const before = [{ locale: 'en', id: 'a', message: 'Hi {{x}} {{x:zz}}' }, { locale: 'cs', id: 'a', message: 'A' }];
+    const after = { locale: 'en', id: 'b', message: '{{v:zz}}' };
+    const stop = (what: string, unit: string) => ({ code: 'unreadable-catalogue', severity: 'error', message: `This entry's ${what} is not well-formed Unicode text: it holds the unpaired surrogate ${unit}, so the catalogue is read no further.`, start: 0, end: 0 });
+
+    for (const [entry, what, unit] of [[{ locale: 'cs', id: 'b', message: '{{\ud800' }, 'message', 'U+D800'], [{ locale: 'cs', id: 'b\udc00', message: '{{' }, 'id', 'U+DC00'], [{ locale: '\ud83d', id: 'b', message: '{{' }, 'locale', 'U+D83D']] as const) {
+      expect(lintEntries([...before, entry, after], { source: 'en' })).toEqual([
+        ...lintMessage(before[0].message, { locale: 'en' }).map((found) => ({ ...found, locale: 'en', id: 'a', entry: 0 })),
+        { ...stop(what, unit), locale: entry.locale, id: entry.id, entry: 2 },
+      ]);
+    }
+
+    expect(codes(lintCatalogue({ en: { a: 'A', '\udfff': '{{', b: '{{v:zz}}' } }))).toEqual(['unreadable-catalogue en \udfff']);
+    expect(codes(lintCatalogue({ en: { a: 'A', b: '\ud800' }, cs: { a: 'A' } }))).toEqual(['unreadable-catalogue en b']);
+    expect(codes(lintCatalogue({ cs: { a: 'A' }, en: { a: 'A\ud800' } }))).toEqual(['unreadable-catalogue en a']);
+    expect(codes(lintCatalogue({ en: { a: 'A' }, cs: { b: '\ud800' } }, { source: 'de' }))).toEqual(['unreadable-catalogue cs b']);
+    expect(codes(lintEntries([{ locale: 'en', id: 'a', message: 'A' }, { locale: 'en', id: 'b', message: '\ud800' }], { locales: ['en', 'cs', 'EN'] }))).toEqual(['duplicate-locale en a', 'unreadable-catalogue en b']);
+    expect(codes(lintEntries([{ locale: 'en', id: 'a', message: 'A' }, { locale: 'en', id: 'a', message: 'B' }, { locale: 'en', id: 'b\udc00', message: '' }]))).toEqual(['duplicate-id en a', 'unreadable-catalogue en b\udc00']);
+  });
+
   // A locale of the catalogue that holds no message is still one of its
   // locales.
   it('missing-message: a locale with no message at all lacks every one', () => {
@@ -129,6 +152,18 @@ describe('a catalogue', () => {
 
   it('duplicate-locale: a spelling under which no message is read, on the first message of its locale', () => {
     expect(codes(lintCatalogue({ 'en-US': {}, cs: { hi: 'Ahoj' }, 'en-us': { hi: 'Hi', bye: 'Bye' } }))).toEqual(['duplicate-locale en-us hi', 'missing-message en-us bye']);
+  });
+
+  // A caller's options are no catalogue text: an unpaired surrogate in one
+  // reads as U+FFFD, as a command's arguments converted lossily do.
+  it('reads a source or a locale of `locales` that is not well-formed Unicode text with U+FFFD in place of each unpaired surrogate', () => {
+    expect(lintEntries([{ locale: 'en', id: 'a', message: 'A {{x}}' }], { source: 'x\ud800' }).map(({ message }) => message)).toEqual(['The source locale `x\ufffd` is no locale of the catalogue, so nothing `en` holds is compared with it.']);
+    expect(lintEntries([{ locale: 'x\ufffd', id: 'a', message: 'A' }, { locale: 'en', id: 'a', message: 'A {{x}}' }], { source: 'x\udc00' }).map(({ code }) => code)).toEqual(['parameter-mismatch']);
+    expect(lintEntries([{ locale: 'en', id: 'a', message: 'A' }], { locales: ['\ud800'] }).map(({ message }) => message)).toEqual(['`\ufffd` has no message `a`.']);
+  });
+
+  it('holds no unpaired surrogate in the text of a finding about a locale that holds no message', () => {
+    expect(lintCatalogue({ en: { a: 'A' }, '\ud800': {} }).filter(({ message }) => /\p{Cs}/u.test(message))).toEqual([]);
   });
 
   it('names a message by its index in the entries it was read from', () => {
