@@ -1,7 +1,7 @@
 name: Benchmark
 
 # The benchmark of a PR against its base, posted on the PR and in the job's
-# summary, one per workspace. It fails where the benchmark does: a row of the
+# summary, one per workspace and one for the Rust crate. It fails where the benchmark does: a row of the
 # branch that fails, or, unless the PR carries the `bench-accepted` label, a
 # count that grew, a row gone missing or changing kind, or a row that fails on
 # the base. Whether the base has the workspace's benchmark is read from the
@@ -15,6 +15,7 @@ on:
       - bench/**
       - lint/**
       - eslint-plugin/**
+      - rust/**
       - package.json
       - package-lock.json
       - '!**/*.md'
@@ -38,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [lint, eslint-plugin]
+        package: [lint, eslint-plugin, rust]
 
     steps:
       - name: Checkout the branch
@@ -85,6 +86,7 @@ jobs:
       # benchmark has nothing to compare, so it is not built; one that does not
       # build leaves rows that fail, which the label can accept.
       - name: Install and build
+        if: matrix.package != 'rust'
         env:
           HOLDS: ${{ steps.base.outputs.holds }}
         run: |
@@ -92,6 +94,18 @@ jobs:
             (cd base && npm ci --ignore-scripts && npm run build) || echo "::warning::The base did not install or build."
           fi
           (cd change && npm ci --ignore-scripts && npm run build)
+
+      # The crate by its `bench/prepare.sh`, on the runner's Rust; the base
+      # under the same terms.
+      - name: Prepare the crate
+        if: matrix.package == 'rust'
+        env:
+          HOLDS: ${{ steps.base.outputs.holds }}
+        run: |
+          if [ "$HOLDS" = true ]; then
+            (cd base/rust && sh bench/prepare.sh) || echo "::warning::The base did not build."
+          fi
+          (cd change/rust && sh bench/prepare.sh)
 
       # Read when the job runs rather than off the event, so a re-run sees a
       # label added since.

@@ -92,3 +92,93 @@ jobs:
 
       - name: Test
         run: npm run test:${{ matrix.runtime }}
+
+  # The Rust crate. Debug builds, on each stated toolchain and system, with
+  # the plural rules the crate carries and without them.
+  Rust:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        toolchain: ['1.88', stable]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        features: ['', --no-default-features]
+    defaults:
+      run:
+        shell: bash
+        working-directory: rust
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        env:
+          TOOLCHAIN: ${{ matrix.toolchain }}
+        run: |
+          rustup toolchain install "$TOOLCHAIN" --profile minimal --no-self-update
+          rustup default "$TOOLCHAIN"
+
+      # Written by main only, so a pull request reads what main built and
+      # leaves nothing behind for another to read.
+      - name: Cache the build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          key: ${{ matrix.features }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Test
+        env:
+          FEATURES: ${{ matrix.features }}
+        run: cargo test -p curly-message-lint --locked $FEATURES
+
+  Rust-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: rust
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy --target wasm32-unknown-unknown --no-self-update
+          rustup default stable
+
+      - name: Cache the build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      # Once with the plural rules the crate carries and once without, so the
+      # code each leaves out is linted by the other.
+      - name: Clippy
+        run: |
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo clippy -p curly-message-lint --all-targets --no-default-features --locked -- -D warnings
+
+      - name: Docs
+        env:
+          RUSTDOCFLAGS: -Dwarnings
+        run: cargo doc -p curly-message-lint --no-deps --locked
+
+      # The library as a host with plural rules of its own takes it.
+      - name: Build for WebAssembly
+        run: cargo build -p curly-message-lint --lib --no-default-features --target wasm32-unknown-unknown --locked
+
+      # The harness and the rows it is checked on are the family's, the same
+      # file in every package.
+      - name: Benchmark harness
+        run: |
+          cmp bench/harness.mjs ../bench/harness.mjs
+          diff -r bench/check ../bench/check
