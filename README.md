@@ -22,6 +22,12 @@ The library's README lists every rule. The command line runs all of them,
 those that compare one locale with another included. The plugin runs the ones a
 single message decides, since ESLint hands a rule one file at a time.
 
+[`fixtures/`](./fixtures) is the linter's contract as data: messages, lists of
+entries and catalogue files, each with the findings a linter answers for it,
+and the plural rules it is read with in place of the host's. The library's
+suite runs every case, and the set's README says what a runner in another
+language does with it.
+
 Issues are filed in the family's shared tracker,
 [`curly-message/spec`](https://github.com/curly-message/spec/issues).
 

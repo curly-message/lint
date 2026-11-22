@@ -1,0 +1,39 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "A count shown as written beside a `plural` (section 11.5).",
+  "cases": [
+    {
+      "name": "a count shown as written beside `plural`",
+      "message": "{{n}} {{n:plural; one:file; other:files;}}",
+      "findings": [
+        {
+          "code": "bare-count",
+          "severity": "warning",
+          "section": "11.5",
+          "message": "`{{n}}` shows the value as it is written, while `plural` selects by the number `number` would show, and the two part over `1.0` or `1.999`. Write the count with `:number`.",
+          "start": 0,
+          "end": 5
+        }
+      ]
+    },
+    {
+      "name": "a count shown with `number`",
+      "message": "{{n:number}} {{n:plural; one:file; other:files;}}",
+      "findings": []
+    },
+    {
+      "name": "another parameter shown as written",
+      "message": "{{m}} {{n:plural; one:file; other:files;}}",
+      "findings": []
+    },
+    {
+      "name": "a host's `plural`",
+      "message": "{{n}} {{n:plural; one:file; other:files;}}",
+      "options": {
+        "modifiers": ["plural"]
+      },
+      "findings": []
+    }
+  ]
+}

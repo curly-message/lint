@@ -1,0 +1,114 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "The modifiers a host has: Core's alone, and those it registers.",
+  "cases": [
+    {
+      "name": "the modifiers Intl defines, for a host without Intl",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "n",
+          "message": "{{n:number}}"
+        },
+        {
+          "locale": "cs",
+          "id": "n",
+          "message": "{{n:number}}"
+        }
+      ],
+      "options": {
+        "intl": false,
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "unknown-modifier",
+          "severity": "error",
+          "section": "11.4",
+          "message": "`number` is a modifier of the Intl level, which the host does not satisfy, and the host does not register it, so the placeholder takes its fallback chain.",
+          "start": 4,
+          "end": 10
+        },
+        {
+          "entry": 1,
+          "code": "unknown-modifier",
+          "severity": "error",
+          "section": "11.4",
+          "message": "`number` is a modifier of the Intl level, which the host does not satisfy, and the host does not register it, so the placeholder takes its fallback chain.",
+          "start": 4,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "a modifier the host does not register",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "v",
+          "message": "{{v:upper}}"
+        },
+        {
+          "locale": "cs",
+          "id": "v",
+          "message": "{{v}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "unknown-modifier",
+          "severity": "error",
+          "section": "11.4",
+          "message": "`upper` is no modifier the format defines or the host registers, so the placeholder takes its fallback chain.",
+          "start": 4,
+          "end": 9
+        },
+        {
+          "entry": 1,
+          "code": "modifier-mismatch",
+          "severity": "warning",
+          "section": "11",
+          "message": "`v` is shown as it is here and with `upper` in the `en` message.",
+          "start": 0,
+          "end": 5
+        }
+      ]
+    },
+    {
+      "name": "a modifier the host registers",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "v",
+          "message": "{{v:upper}}"
+        },
+        {
+          "locale": "cs",
+          "id": "v",
+          "message": "{{v}}"
+        }
+      ],
+      "options": {
+        "modifiers": ["upper"],
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "modifier-mismatch",
+          "severity": "warning",
+          "section": "11",
+          "message": "`v` is shown as it is here and with `upper` in the `en` message.",
+          "start": 0,
+          "end": 5
+        }
+      ]
+    }
+  ]
+}

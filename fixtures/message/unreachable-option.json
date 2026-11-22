@@ -1,0 +1,106 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "An option its modifier never selects (sections 9.5, 11.1 and 11.5).",
+  "cases": [
+    {
+      "name": "a key `lt` cannot compare",
+      "message": "{{v:lt; 5:a; abc:b;}}",
+      "findings": [
+        {
+          "code": "unreachable-option",
+          "severity": "warning",
+          "section": "11.1",
+          "message": "`abc` is not a number, and `lt` compares numerically, so this option is never selected.",
+          "start": 13,
+          "end": 16
+        }
+      ]
+    },
+    {
+      "name": "nothing is less than `-Infinity`",
+      "message": "{{v:lt; -Infinity:never; 5:small; default:D}}",
+      "findings": [
+        {
+          "code": "unreachable-option",
+          "severity": "warning",
+          "section": "11.1",
+          "message": "No value is less than `-Infinity`, so this option is never selected.",
+          "start": 8,
+          "end": 17
+        }
+      ]
+    },
+    {
+      "name": "nothing is greater than `Infinity`",
+      "message": "{{v:gt; Infinity:never; 5:big; default:D}}",
+      "findings": [
+        {
+          "code": "unreachable-option",
+          "severity": "warning",
+          "section": "11.1",
+          "message": "No value is greater than `Infinity`, so this option is never selected.",
+          "start": 8,
+          "end": 16
+        }
+      ]
+    },
+    {
+      "name": "a finite value is less than `Infinity`",
+      "message": "{{v:lt; Infinity:finite; default:D}}",
+      "findings": []
+    },
+    {
+      "name": "a third key of `ne`",
+      "message": "{{v:ne; a:not a; b:not b; c:not c; default:D}}",
+      "findings": [
+        {
+          "code": "unreachable-option",
+          "severity": "warning",
+          "section": "11.1",
+          "message": "Every value differs from `a` or `b`, and `ne` selects the first option whose key differs, so this option is never selected.",
+          "start": 26,
+          "end": 27
+        }
+      ]
+    },
+    {
+      "name": "two keys of `ne`",
+      "message": "{{v:ne; a:not a; b:not b; default:D}}",
+      "findings": []
+    },
+    {
+      "name": "an option of a formatting modifier",
+      "message": "{{n:number; 1:one;}}",
+      "findings": [
+        {
+          "code": "unreachable-option",
+          "severity": "warning",
+          "section": "9.5",
+          "message": "`number` selects nothing, so this option is never read.",
+          "start": 12,
+          "end": 13
+        }
+      ]
+    },
+    {
+      "name": "a fraction `ordinal` never takes",
+      "message": "{{n:ordinal; 1.5:x; other:y;}}",
+      "findings": [
+        {
+          "code": "unreachable-option",
+          "severity": "warning",
+          "section": "11.5",
+          "message": "`ordinal` takes integers, so `1.5` is never selected.",
+          "start": 13,
+          "end": 16
+        }
+      ]
+    },
+    {
+      "name": "`lte`, which selects a key by text",
+      "message": "{{v:lte; abc:b;}}",
+      "findings": []
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "`default` spelled in another case (section 9.3).",
+  "cases": [
+    {
+      "name": "`DEFAULT` beside options",
+      "message": "{{v; a:A; DEFAULT:D;}}",
+      "findings": [
+        {
+          "code": "default-case",
+          "severity": "error",
+          "section": "9.3",
+          "message": "`DEFAULT` is an option, not the inline default: only `default` in lower case is, and this placeholder has none.",
+          "start": 10,
+          "end": 17
+        }
+      ]
+    },
+    {
+      "name": "`Default` where the placeholder has no inline default",
+      "message": "{{v; Default:D;}}",
+      "findings": [
+        {
+          "code": "default-case",
+          "severity": "error",
+          "section": "9.3",
+          "message": "`Default` is an option, not the inline default: only `default` in lower case is, and this placeholder has none.",
+          "start": 5,
+          "end": 12
+        }
+      ]
+    },
+    {
+      "name": "`Default` beside the inline default, how `eq` selects for the value `default`",
+      "message": "{{mode; Default:Standard settings; custom:Custom settings; default:Unknown}}",
+      "findings": []
+    }
+  ]
+}

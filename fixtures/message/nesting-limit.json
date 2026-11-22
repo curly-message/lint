@@ -1,0 +1,90 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "A placeholder written deeper than resolution goes (section 13).",
+  "cases": [
+    {
+      "name": "eight levels",
+      "message": "{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v}};}};}};}};}};}};}};}}",
+      "findings": []
+    },
+    {
+      "name": "ten levels, reported once",
+      "message": "{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v}};}};}};}};}};}};}};}};}};}}",
+      "findings": [
+        {
+          "code": "nesting-limit",
+          "severity": "error",
+          "section": "13",
+          "message": "This placeholder is written 9 deep, past the 8 levels resolution goes, so it takes its fallback chain.",
+          "start": 56,
+          "end": 71
+        }
+      ]
+    },
+    {
+      "name": "nine levels, at the placeholder past the limit",
+      "message": "{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v; a:{{v}};}};}};}};}};}};}};}};}}",
+      "findings": [
+        {
+          "code": "nesting-limit",
+          "severity": "error",
+          "section": "13",
+          "message": "This placeholder is written 9 deep, past the 8 levels resolution goes, so it takes its fallback chain.",
+          "start": 56,
+          "end": 61
+        }
+      ]
+    },
+    {
+      "name": "an unknown modifier past the limit",
+      "message": "{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{v:zz}};}};}};}};}};}};}};}};}}",
+      "findings": [
+        {
+          "code": "nesting-limit",
+          "severity": "error",
+          "section": "13",
+          "message": "This placeholder is written 9 deep, past the 8 levels resolution goes, so it takes its fallback chain.",
+          "start": 56,
+          "end": 64
+        }
+      ]
+    },
+    {
+      "name": "nothing else past the limit",
+      "message": "{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{v; Default:x; a:{{n:plural; one:y;}};}};}};}};}};}};}};}};}};}}",
+      "findings": [
+        {
+          "code": "nesting-limit",
+          "severity": "error",
+          "section": "13",
+          "message": "This placeholder is written 9 deep, past the 8 levels resolution goes, so it takes its fallback chain.",
+          "start": 56,
+          "end": 97
+        }
+      ]
+    },
+    {
+      "name": "the text of an inline default past the limit, which the fallback chain reads",
+      "message": "{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{v; default:\\x;}};}};}};}};}};}};}};}};}}",
+      "findings": [
+        {
+          "code": "nesting-limit",
+          "severity": "error",
+          "section": "13",
+          "message": "This placeholder is written 9 deep, past the 8 levels resolution goes, so it takes its fallback chain.",
+          "start": 56,
+          "end": 74
+        },
+        {
+          "code": "inert-escape",
+          "severity": "warning",
+          "section": "7",
+          "message": "`\\x` cancels nothing, so the backslash and `x` both render. Write `\\\\x` to keep both on purpose.",
+          "start": 69,
+          "end": 71
+        }
+      ]
+    }
+  ]
+}

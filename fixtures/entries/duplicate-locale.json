@@ -1,0 +1,205 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "A locale written two ways.",
+  "cases": [
+    {
+      "name": "a locale written with `_` and with `-`",
+      "entries": [
+        {
+          "locale": "en_US",
+          "id": "hi",
+          "message": "Hi"
+        },
+        {
+          "locale": "en-US",
+          "id": "bye",
+          "message": "Bye"
+        },
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        },
+        {
+          "locale": "cs",
+          "id": "bye",
+          "message": "Nashle"
+        }
+      ],
+      "options": {
+        "source": "cs",
+        "locales": ["en_US", "en-US", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en-US` is `en_US` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a locale written in two cases",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "hi",
+          "message": "Hi"
+        },
+        {
+          "locale": "en-US",
+          "id": "bye",
+          "message": "Bye"
+        },
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        },
+        {
+          "locale": "cs",
+          "id": "bye",
+          "message": "Nashle"
+        }
+      ],
+      "options": {
+        "source": "cs",
+        "locales": ["en-us", "en-US", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en-US` is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "one set of messages under two spellings, which defines no id twice",
+      "entries": [
+        {
+          "locale": "en-US",
+          "id": "hi",
+          "message": "Hi"
+        },
+        {
+          "locale": "en-US",
+          "id": "bye",
+          "message": "Bye"
+        },
+        {
+          "locale": "en_US",
+          "id": "hi",
+          "message": "Hi"
+        },
+        {
+          "locale": "en_US",
+          "id": "bye",
+          "message": "Bye"
+        },
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        },
+        {
+          "locale": "cs",
+          "id": "bye",
+          "message": "Nashle"
+        }
+      ],
+      "options": {
+        "locales": ["en-US", "en_US", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 2,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en_US` is `en-US` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a spelling under which no message is read, on the first message of its locale",
+      "entries": [
+        {
+          "locale": "cs",
+          "id": "hi",
+          "message": "Ahoj"
+        },
+        {
+          "locale": "en-us",
+          "id": "hi",
+          "message": "Hi"
+        },
+        {
+          "locale": "en-us",
+          "id": "bye",
+          "message": "Bye"
+        }
+      ],
+      "options": {
+        "locales": ["en-US", "cs", "en-us"]
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en-US`, under which no message was read, is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        },
+        {
+          "entry": 2,
+          "code": "missing-message",
+          "severity": "warning",
+          "message": "`cs` has no message `bye`.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a spelling `locales` lists twice",
+      "entries": [
+        {
+          "locale": "en-us",
+          "id": "hi",
+          "message": "Hi"
+        }
+      ],
+      "options": {
+        "locales": ["en-US", "en-US", "en-us"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "duplicate-locale",
+          "severity": "warning",
+          "message": "`en-US`, under which no message was read, is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.",
+          "start": 0,
+          "end": 0
+        }
+      ]
+    },
+    {
+      "name": "a locale that holds no message, which has no message to report it on",
+      "entries": [],
+      "options": {
+        "locales": ["en-US", "en-us", "cs"]
+      },
+      "findings": []
+    }
+  ]
+}

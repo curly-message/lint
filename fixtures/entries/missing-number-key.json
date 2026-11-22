@@ -1,0 +1,144 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "A number key the source locale's selection has and another's lacks (section 11.5).",
+  "cases": [
+    {
+      "name": "a number key the source selection has",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "n",
+          "message": "{{n:plural; 0:none; one:file; other:files;}}"
+        },
+        {
+          "locale": "cs",
+          "id": "n",
+          "message": "{{n:plural; one:soubor; few:soubory; many:souboru; other:soubor\u016f;}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "plurals": {
+        "cs": {
+          "cardinal": {
+            "categories": ["few", "many", "one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001],
+              "few": [2, 3, 4, -2, -3, -4, 2.001, 3.001, 4.001, -2.001, -3.001, -4.001],
+              "many": [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5, 18.5, 19.5, 20.5, -0.5, -1.5, -2.5, -3.5, -4.5, -5.5, -6.5, -7.5, -8.5, -9.5, -10.5, -11.5, -12.5, -13.5, -14.5, -15.5, -16.5, -17.5, -18.5, -19.5, -20.5]
+            }
+          }
+        },
+        "en": {
+          "cardinal": {
+            "categories": ["one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001]
+            }
+          }
+        }
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "missing-number-key",
+          "severity": "warning",
+          "section": "11.5",
+          "message": "The `en` message gives `0` text of its own, and this selection has no `0` option, so it takes its category's.",
+          "start": 4,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "a selection around the plural one gives zero its own text",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "n",
+          "message": "{{n:plural; 0:none; one:file; other:files;}}"
+        },
+        {
+          "locale": "cs",
+          "id": "n",
+          "message": "{{n; 0:nic; default:{{n:plural; one:soubor; few:soubory; many:souboru; other:soubor\u016f;}};}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "plurals": {
+        "cs": {
+          "cardinal": {
+            "categories": ["few", "many", "one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001],
+              "few": [2, 3, 4, -2, -3, -4, 2.001, 3.001, 4.001, -2.001, -3.001, -4.001],
+              "many": [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5, 18.5, 19.5, 20.5, -0.5, -1.5, -2.5, -3.5, -4.5, -5.5, -6.5, -7.5, -8.5, -9.5, -10.5, -11.5, -12.5, -13.5, -14.5, -15.5, -16.5, -17.5, -18.5, -19.5, -20.5]
+            }
+          }
+        },
+        "en": {
+          "cardinal": {
+            "categories": ["one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001]
+            }
+          }
+        }
+      },
+      "findings": []
+    },
+    {
+      "name": "an `eq` key that spells the number otherwise selects nothing for it",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "n",
+          "message": "{{n:plural; 1:one file; one:file; other:files;}}"
+        },
+        {
+          "locale": "cs",
+          "id": "n",
+          "message": "{{n; 1.0:jeden soubor; default:{{n:plural; one:soubor; few:soubory; many:souboru; other:soubor\u016f;}};}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "plurals": {
+        "cs": {
+          "cardinal": {
+            "categories": ["few", "many", "one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001],
+              "few": [2, 3, 4, -2, -3, -4, 2.001, 3.001, 4.001, -2.001, -3.001, -4.001],
+              "many": [0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5, 9.5, 10.5, 11.5, 12.5, 13.5, 14.5, 15.5, 16.5, 17.5, 18.5, 19.5, 20.5, -0.5, -1.5, -2.5, -3.5, -4.5, -5.5, -6.5, -7.5, -8.5, -9.5, -10.5, -11.5, -12.5, -13.5, -14.5, -15.5, -16.5, -17.5, -18.5, -19.5, -20.5]
+            }
+          }
+        },
+        "en": {
+          "cardinal": {
+            "categories": ["one", "other"],
+            "select": {
+              "one": [1, -1, 1.001, -1.001]
+            }
+          }
+        }
+      },
+      "findings": [
+        {
+          "entry": 1,
+          "code": "missing-number-key",
+          "severity": "warning",
+          "section": "11.5",
+          "message": "The `en` message gives `1` text of its own, and this selection has no `1` option, so it takes its category's.",
+          "start": 35,
+          "end": 41
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "../schema.json",
+  "kind": "entries",
+  "description": "No placeholder past the nesting limit is compared (section 13).",
+  "cases": [
+    {
+      "name": "no placeholder past the limit is compared",
+      "entries": [
+        {
+          "locale": "en",
+          "id": "m",
+          "message": "{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{x}};}};}};}};}};}};}};}};}}"
+        },
+        {
+          "locale": "cs",
+          "id": "m",
+          "message": "{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{w; a:{{y}};}};}};}};}};}};}};}};}}"
+        }
+      ],
+      "options": {
+        "locales": ["en", "cs"]
+      },
+      "findings": [
+        {
+          "entry": 0,
+          "code": "nesting-limit",
+          "severity": "error",
+          "section": "13",
+          "message": "This placeholder is written 9 deep, past the 8 levels resolution goes, so it takes its fallback chain.",
+          "start": 56,
+          "end": 61
+        },
+        {
+          "entry": 1,
+          "code": "nesting-limit",
+          "severity": "error",
+          "section": "13",
+          "message": "This placeholder is written 9 deep, past the 8 levels resolution goes, so it takes its fallback chain.",
+          "start": 56,
+          "end": 61
+        }
+      ]
+    }
+  ]
+}

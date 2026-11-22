@@ -1,0 +1,104 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "A `{{` that opens no placeholder (section 6).",
+  "cases": [
+    {
+      "name": "a `{{` nothing closes on its line",
+      "message": "Hello {{name",
+      "findings": [
+        {
+          "code": "unclosed-placeholder",
+          "severity": "error",
+          "section": "6",
+          "message": "`{{` opens no placeholder: nothing closes it on its line, so it renders as text.",
+          "start": 6,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "name": "a `{{` closed on the next line only",
+      "message": "Hello {{name\n}}",
+      "findings": [
+        {
+          "code": "unclosed-placeholder",
+          "severity": "error",
+          "section": "6",
+          "message": "`{{` opens no placeholder: nothing closes it on its line, so it renders as text.",
+          "start": 6,
+          "end": 8
+        }
+      ]
+    },
+    {
+      "name": "escaped braces, which open nothing and are no defect",
+      "message": "Braces \\{\\{ like this \\}\\}",
+      "findings": []
+    },
+    {
+      "name": "a `{{` inside an option value",
+      "message": "{{v; a:{{w; default:x;}}",
+      "findings": [
+        {
+          "code": "unclosed-placeholder",
+          "severity": "error",
+          "section": "6",
+          "message": "`{{` opens no placeholder: what it encloses is not a placeholder, so it renders as text.",
+          "start": 0,
+          "end": 2
+        }
+      ]
+    },
+    {
+      "name": "nothing closes it on its line",
+      "message": "a {{b",
+      "findings": [
+        {
+          "code": "unclosed-placeholder",
+          "severity": "error",
+          "section": "6",
+          "message": "`{{` opens no placeholder: nothing closes it on its line, so it renders as text.",
+          "start": 2,
+          "end": 4
+        }
+      ]
+    },
+    {
+      "name": "what it encloses is not a placeholder",
+      "message": "{{a{{b}}",
+      "findings": [
+        {
+          "code": "unclosed-placeholder",
+          "severity": "error",
+          "section": "6",
+          "message": "`{{` opens no placeholder: what it encloses is not a placeholder, so it renders as text.",
+          "start": 0,
+          "end": 2
+        }
+      ]
+    },
+    {
+      "name": "each `{{` says why it opens nothing",
+      "message": "{{a{{b}} {{c",
+      "findings": [
+        {
+          "code": "unclosed-placeholder",
+          "severity": "error",
+          "section": "6",
+          "message": "`{{` opens no placeholder: what it encloses is not a placeholder, so it renders as text.",
+          "start": 0,
+          "end": 2
+        },
+        {
+          "code": "unclosed-placeholder",
+          "severity": "error",
+          "section": "6",
+          "message": "`{{` opens no placeholder: nothing closes it on its line, so it renders as text.",
+          "start": 9,
+          "end": 11
+        }
+      ]
+    }
+  ]
+}

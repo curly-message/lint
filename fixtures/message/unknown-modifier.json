@@ -1,0 +1,100 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "A modifier neither the format defines nor the host registers (sections 2 and 11.4).",
+  "cases": [
+    {
+      "name": "a modifier nobody answers to",
+      "message": "{{v:zz}}",
+      "findings": [
+        {
+          "code": "unknown-modifier",
+          "severity": "error",
+          "section": "11.4",
+          "message": "`zz` is no modifier the format defines or the host registers, so the placeholder takes its fallback chain.",
+          "start": 4,
+          "end": 6
+        }
+      ]
+    },
+    {
+      "name": "one on a placeholder naming no key",
+      "message": "{{:zz}}",
+      "findings": [
+        {
+          "code": "unknown-modifier",
+          "severity": "error",
+          "section": "11.4",
+          "message": "`zz` is no modifier the format defines or the host registers, so the placeholder takes its fallback chain.",
+          "start": 3,
+          "end": 5
+        }
+      ]
+    },
+    {
+      "name": "one the host registers",
+      "message": "{{v:zz}}",
+      "options": {
+        "modifiers": ["zz"]
+      },
+      "findings": []
+    },
+    {
+      "name": "the format's own modifiers",
+      "message": "{{v:number}} {{v:plural; other:x;}}",
+      "findings": []
+    },
+    {
+      "name": "the modifiers Intl defines, for a host that satisfies Core alone",
+      "message": "{{n:number}} {{n:plural; one:a; other:b;}} {{v:eq; a:A;}}",
+      "options": {
+        "intl": false,
+        "locale": "cs"
+      },
+      "findings": [
+        {
+          "code": "unknown-modifier",
+          "severity": "error",
+          "section": "11.4",
+          "message": "`number` is a modifier of the Intl level, which the host does not satisfy, and the host does not register it, so the placeholder takes its fallback chain.",
+          "start": 4,
+          "end": 10
+        },
+        {
+          "code": "unknown-modifier",
+          "severity": "error",
+          "section": "11.4",
+          "message": "`plural` is a modifier of the Intl level, which the host does not satisfy, and the host does not register it, so the placeholder takes its fallback chain.",
+          "start": 17,
+          "end": 23
+        }
+      ]
+    },
+    {
+      "name": "one of Intl's says so",
+      "message": "{{n:number}}",
+      "options": {
+        "intl": false
+      },
+      "findings": [
+        {
+          "code": "unknown-modifier",
+          "severity": "error",
+          "section": "11.4",
+          "message": "`number` is a modifier of the Intl level, which the host does not satisfy, and the host does not register it, so the placeholder takes its fallback chain.",
+          "start": 4,
+          "end": 10
+        }
+      ]
+    },
+    {
+      "name": "one of Intl's the host registers",
+      "message": "{{n:number}}",
+      "options": {
+        "intl": false,
+        "modifiers": ["number"]
+      },
+      "findings": []
+    }
+  ]
+}

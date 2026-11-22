@@ -1,0 +1,22 @@
+{
+  "$schema": "../schema.json",
+  "kind": "message",
+  "description": "Messages that render as written.",
+  "cases": [
+    {
+      "name": "a message that renders as written",
+      "message": "Hello, {{name; default:Guest;}}! You have {{count:number;}} {{count; 1:message; default:messages;}}.",
+      "findings": []
+    },
+    {
+      "name": "an empty message",
+      "message": "",
+      "findings": []
+    },
+    {
+      "name": "a message with no placeholder",
+      "message": "No placeholder at all.",
+      "findings": []
+    }
+  ]
+}

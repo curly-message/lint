@@ -38,4 +38,7 @@ Format, as a library and as the `curly-lint` command.
   read in a locale, no locale is compared with another in that run, and each
   message is still linted with its locale.
 * **The library** exports `lintMessage`, `lintCatalogue`, `lintEntries`,
-  `entriesOf`, `flatten`, `readCatalogue` and the `RULES` table.
+  `entriesOf`, `flatten`, `readCatalogue` and the `RULES` table. Findings
+  come in one order: by `entry` in a catalogue, then by `start`, then by
+  `end`, then by their rule's place in `RULES`, then by `message`, comparing
+  UTF-16 code units.

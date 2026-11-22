@@ -505,8 +505,8 @@ describe('curly-lint', () => {
       code: 0,
       out: [
         'locales/en/common.json:1:21  warning  `cs` has no message `common.bye`.  missing-message',
-        'locales/en/common.json:1:21  warning  `pt` has no message `common.bye`.  missing-message',
         'locales/en/common.json:1:21  warning  `pt-BR` has no message `common.bye`.  missing-message',
+        'locales/en/common.json:1:21  warning  `pt` has no message `common.bye`.  missing-message',
         '',
         '3 problems (0 errors, 3 warnings)',
         '',

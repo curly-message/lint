@@ -1,5 +1,6 @@
-import { definedBy, finding, FORMATTING, lintTree, quoted, readingOf, resolvable } from './message';
-import { numberOf } from './plural';
+import { byPlace, definedBy, finding, FORMATTING, lintTree, quoted, readingOf, resolvable } from './message';
+import { intlPlurals, numberOf } from './plural';
+import type { Plurals } from './plural';
 import { localeKey } from './tag';
 import { read } from './tree';
 import type { Placeholder, Tree } from './tree';
@@ -142,7 +143,7 @@ const numbersOf = (placeholders: Placeholder[], spelled: boolean) => placeholder
  * `false`. Each message is still linted with its locale, and each locale on
  * its own.
  */
-export const lintEntriesComparing = (entries: readonly Entry[], options: EntriesOptions, comparing: ((id: string) => boolean) | false): CatalogueFinding[] => {
+export const lintEntriesComparing = (entries: readonly Entry[], options: EntriesOptions, comparing: ((id: string) => boolean) | false, plurals: Plurals): CatalogueFinding[] => {
   const hosted = options.modifiers ?? [];
   const modifiers = { defined: definedBy(options.intl), hosted };
   const findings: CatalogueFinding[] = [];
@@ -178,7 +179,7 @@ export const lintEntriesComparing = (entries: readonly Entry[], options: Entries
   entries.forEach(({ locale: written, id, message }, entry) => {
     const tree = read(message);
 
-    for (const found of lintTree(message, tree, { modifiers: hosted, intl: options.intl, locale: written })) add(entry, found);
+    for (const found of lintTree(message, tree, { modifiers: hosted, intl: options.intl, locale: written }, plurals)) add(entry, found);
 
     const spelling = spellingOf(written);
     const { locale } = spelling;
@@ -254,14 +255,17 @@ export const lintEntriesComparing = (entries: readonly Entry[], options: Entries
   return findings.sort(order);
 };
 
+/** Lints a list of messages as `lintEntries` does, with the plural rules `plurals` has. */
+export const lintEntriesWith = (plurals: Plurals) => (entries: readonly Entry[], options: EntriesOptions = {}): CatalogueFinding[] => lintEntriesComparing(entries, options, () => true, plurals);
+
 /**
  * Lints a list of messages as one catalogue: each message, each with its
  * locale, then every locale against the source one. A finding names its
  * message by `entry`, the index of the message in `entries`.
  */
-export const lintEntries = (entries: readonly Entry[], options: EntriesOptions = {}): CatalogueFinding[] => lintEntriesComparing(entries, options, () => true);
+export const lintEntries = lintEntriesWith(intlPlurals);
 
-const order = (a: CatalogueFinding, b: CatalogueFinding) => a.entry - b.entry || a.start - b.start;
+const order = (a: CatalogueFinding, b: CatalogueFinding) => a.entry - b.entry || byPlace(a, b);
 
 const compare = (source: string, reference: Names, entry: number, names: Names, modifiers: Modifiers, make: (entry: number, code: Code, section: string | undefined, message: string, start?: number, end?: number) => void) => {
   for (const name of reference.keys()) {
