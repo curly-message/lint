@@ -1,5 +1,8 @@
 # @curly-message/lint
 
+[![npm](https://img.shields.io/npm/v/@curly-message/lint)](https://www.npmjs.com/package/@curly-message/lint)
+[![tests](https://github.com/curly-message/lint/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/curly-message/lint/actions/workflows/tests.yml)
+
 A linter for the [Curly Message Format](https://github.com/curly-message/spec).
 Nothing in the format fails loudly: a placeholder that never closes is text, a
 modifier nobody registered takes the fallback chain, a plural category nobody

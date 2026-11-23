@@ -1,5 +1,8 @@
 # @curly-message/eslint-plugin
 
+[![npm](https://img.shields.io/npm/v/@curly-message/eslint-plugin)](https://www.npmjs.com/package/@curly-message/eslint-plugin)
+[![tests](https://github.com/curly-message/lint/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/curly-message/lint/actions/workflows/tests.yml)
+
 ESLint rules for the [Curly Message Format](https://github.com/curly-message/spec).
 They put what [`@curly-message/lint`](../lint) finds in a message under the
 reader's cursor: in a JSON catalogue, in a catalogue written as a JavaScript or
