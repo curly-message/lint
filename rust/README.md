@@ -1,5 +1,8 @@
 # curly-message-lint
 
+[![crates.io](https://img.shields.io/crates/v/curly-message-lint)](https://crates.io/crates/curly-message-lint)
+[![tests](https://github.com/curly-message/lint/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/curly-message/lint/actions/workflows/tests.yml)
+
 The Rust implementation of the linter for the
 [Curly Message Format](https://github.com/curly-message/spec): the rules of a
 message, of a message with its locale and of a catalogue, a reader of JSON
