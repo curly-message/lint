@@ -34,8 +34,8 @@ cargo add curly-message-lint
 adds the library. The crate needs Rust 1.88 or newer. It reads a message with
 [`curly-message-parser`](https://github.com/curly-message/parsers/tree/main/rust),
 so what it calls a placeholder is what resolution calls one. Each change is
-tested on Rust 1.88 and on the current stable release, on Linux, macOS and
-Windows, with and without the `cldr` feature, and built for
+tested on Rust 1.88 and on the current stable release, on Linux and Windows
+with and without the `cldr` feature, on macOS with it, and built for
 `wasm32-unknown-unknown` without it.
 
 ## The command line
