@@ -94,7 +94,9 @@ jobs:
         run: npm run test:${{ matrix.runtime }}
 
   # The Rust crate. Debug builds, on each stated toolchain and system, with
-  # the plural rules the crate carries and without them.
+  # the plural rules the crate carries and without them. GitHub places few
+  # macOS jobs at once, so macOS runs each toolchain with the plural rules
+  # alone, and Linux and Windows run each both ways.
   Rust:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
@@ -104,6 +106,8 @@ jobs:
         toolchain: ['1.88', stable]
         os: [ubuntu-latest, windows-latest, macOS-latest]
         features: ['', --no-default-features]
+        exclude:
+          - { os: macOS-latest, features: --no-default-features }
     defaults:
       run:
         shell: bash

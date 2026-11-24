@@ -44,6 +44,10 @@ one npm workspace per JavaScript package, and the Rust crate beside them.
 - **The lockfile is written with npm 11** (`npx npm@11 install`). npm 10 fails
   to resolve the workspaces' peer dependencies, though it installs from the
   lockfile (`npm ci`) as CI's Node 22 does.
+- **macOS runs the ends of each test matrix.** GitHub places few macOS
+  jobs at once, so on macOS `tests.yml` runs only the oldest and the newest
+  version of each runtime or toolchain, and one variant of an axis Linux
+  runs both ways (Rust with `cldr`); Linux and Windows run the whole matrix.
 - Issues live in the family's
   [shared tracker](https://github.com/curly-message/spec/issues).
 
