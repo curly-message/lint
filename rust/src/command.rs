@@ -8,7 +8,7 @@ use crate::finding::{Finding, by_units};
 use crate::locale::{Pattern, Placed, Reader, Reading, read_pattern, tag_of};
 use crate::message::{Options, lint_message};
 use crate::plural::Plurals;
-use crate::read::{Located, read_catalogue, read_findings};
+use crate::read::{Located, one_line, read_catalogue, read_findings};
 use crate::rules::Severity;
 use crate::tag::locale_key;
 
@@ -842,7 +842,7 @@ pub fn run<H: Host + ?Sized>(argv: &[String], host: &mut H) -> i32 {
         let (found, unread) = match catalogues(host, &path, pattern) {
             Ok(read) => read,
             Err(fault) => {
-                host.err(&format!("Cannot read {argument}: {}\n", fault.message));
+                cannot_read(host, argument, &fault);
                 unreadable = true;
                 continue;
             }
@@ -929,7 +929,7 @@ pub fn run<H: Host + ?Sized>(argv: &[String], host: &mut H) -> i32 {
             if unread_at.insert(real) {
                 let shown = shown_at(host, &path);
 
-                host.err(&format!("Cannot read {shown}: {}\n", fault.message));
+                cannot_read(host, &shown, &fault);
             }
 
             unreadable = true;
@@ -951,7 +951,7 @@ pub fn run<H: Host + ?Sized>(argv: &[String], host: &mut H) -> i32 {
             Ok(text) => text,
             Err(fault) => {
                 if unread_at.insert(real) {
-                    host.err(&format!("Cannot read {shown}: {}\n", fault.message));
+                    cannot_read(host, &shown, &fault);
                 }
 
                 unreadable = true;
@@ -1158,8 +1158,10 @@ pub fn run<H: Host + ?Sized>(argv: &[String], host: &mut H) -> i32 {
         } in shown.iter().copied()
         {
             host.out(&format!(
-                "{file}:{line}:{column}  {}  {message}  {code}\n",
-                severity.as_str()
+                "{}:{line}:{column}  {}  {}  {code}\n",
+                one_line(file),
+                severity.as_str(),
+                one_line(message)
             ));
         }
 
@@ -1188,6 +1190,15 @@ pub fn run<H: Host + ?Sized>(argv: &[String], host: &mut H) -> i32 {
     }
 
     i32::from(failed)
+}
+
+// Says a path cannot be read, on one line as a text report writes it, as the
+// system's words may repeat the path.
+fn cannot_read<H: Host + ?Sized>(host: &mut H, path: &str, fault: &Fault) {
+    host.err(&format!(
+        "{}\n",
+        one_line(&format!("Cannot read {path}: {}", fault.message))
+    ));
 }
 
 // Where a finding in a message stands in the file that holds it. A finding

@@ -96,6 +96,15 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 | `--format <format>` | `text`, the default, or `json`. |
 | `--quiet` | Report errors only. |
 
+The text report writes each line terminator of the format's `line-term`
+(U+000A, U+000D, U+2028 and U+2029), each control character (U+0000 to U+001F
+and U+007F to U+009F) and each bidirectional control (U+061C, U+200E, U+200F,
+U+202A to U+202E and U+2066 to U+2069) that a path, an id or a message holds
+by its code point, as `U+000A`, so that a catalogue cannot end a finding's
+line, send the terminal an escape sequence or reorder the rest of the line.
+So does each line that names a path the command cannot read on standard
+error. The JSON report escapes them as JSON does.
+
 A file that is not JSON is an [`unreadable-catalogue`](#unreadable-catalogue)
 error at the place its reading stops, and so is one nested deeper than 512
 levels or holding a string that is not well-formed Unicode text. A file or a

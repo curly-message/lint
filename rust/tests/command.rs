@@ -678,6 +678,60 @@ fn writes_json_with_format_json() {
 }
 
 #[test]
+fn writes_each_line_terminator_control_character_and_bidirectional_control_of_a_text_report_by_its_code_point()
+ {
+    let mut host = Memory::new(&[
+        (
+            "d\u{2028}\u{85}/en.json",
+            "{\"a\\nb\\u001b[31m\": \"x\",\n\"s t\\u00a0\\u200b\\ud83d\\ude00\\u061c\\u200e\\u200f\\u202a\\u202e\\u2066\\u2069\": \"y\"}",
+        ),
+        ("d\u{2028}\u{85}/cs.json", "{}"),
+        ("e\n\u{1b}[2K.json", r#"{"x": "{{"}"#),
+    ]);
+
+    // A space, a no-break space, a format character outside the bidirectional
+    // controls and an astral character are shown as themselves.
+    assert_eq!(
+        host.run(&["d\u{2028}\u{85}/{locale}.json"]),
+        (0, "dU+2028U+0085/en.json:1:20  warning  `cs` has no message `aU+000AbU+001B[31m`.  missing-message\ndU+2028U+0085/en.json:2:74  warning  `cs` has no message `s t\u{a0}\u{200b}\u{1f600}U+061CU+200EU+200FU+202AU+202EU+2066U+2069`.  missing-message\n\n2 problems (0 errors, 2 warnings)\n".to_owned(), String::new())
+    );
+    assert_eq!(
+        host.run(&["e\n\u{1b}[2K.json"]).1,
+        "eU+000AU+001B[2K.json:1:8  error  `{{` opens no placeholder: nothing closes it on its line, so it renders as text.  unclosed-placeholder\n\n1 problem (1 error, 0 warnings)\n"
+    );
+
+    // JSON escapes them as its format does.
+    let (_, out, _) = host.run(&["d\u{2028}\u{85}/{locale}.json", "--format", "json"]);
+
+    assert!(
+        out.contains(
+            "\"file\": \"d\u{2028}\u{85}/en.json\",\n    \"line\": 1,\n    \"column\": 20,"
+        ) && out.contains("\"message\": \"`cs` has no message `a\\nb\\u001b[31m`.\",")
+            && out.contains("\"id\": \"a\\nb\\u001b[31m\"\n")
+            && out.contains("\"id\": \"s t\u{a0}\u{200b}\u{1f600}\u{61c}\u{200e}\u{200f}\u{202a}\u{202e}\u{2066}\u{2069}\"\n"),
+        "{out}"
+    );
+}
+
+#[test]
+fn names_a_file_it_cannot_read_on_one_line_its_path_written_as_a_text_report_writes_it() {
+    let mut host = Memory::new(&[
+        ("d/en.json", r#"{"x": "{{"}"#),
+        ("d/x\nforged finding  unknown-modifier\u{1b}[8m.json", "{}"),
+    ]);
+
+    host.refused
+        .insert("x\nforged finding  unknown-modifier\u{1b}[8m.json");
+
+    let (_, _, err) = host.run(&["d"]);
+
+    assert!(
+        err.starts_with("Cannot read d/xU+000Aforged finding  unknown-modifierU+001B[8m.json: permission denied\n1 file has no locale"),
+        "{err}"
+    );
+}
+
+#[test]
 fn reads_a_locale_given_for_every_file_and_modifiers_the_host_registers() {
     let mut host = Memory::new(&[(
         "messages.json",
