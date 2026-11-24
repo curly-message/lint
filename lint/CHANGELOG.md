@@ -25,7 +25,11 @@ Format, as a library and as the `curly-lint` command.
   `"locales/{locale}/{namespace}.json"` names, takes each file's locale and
   namespace where the pattern places them, and guesses neither: it says how
   many files it read without a locale. It points each finding at its line and
-  column, past the escape sequences JSON spells a string with. A file that is
+  column, past the escape sequences JSON spells a string with. Its text
+  report, and each line naming a path it cannot read, writes each line
+  terminator, control character and bidirectional control a path, an id or a
+  message holds by its code point, as `U+000A`, so each finding stays on its
+  line as written. A file that is
   not JSON is an `unreadable-catalogue` error, and nothing under its namespace
   is compared. A reader that closes the output early, as `head` does, ends the
   report, not the run: the command exits as the lint decided. Output that

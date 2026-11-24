@@ -265,6 +265,53 @@ describe('curly-lint', () => {
     expect(JSON.parse(out)).toEqual([{ file: 'en.json', line: 1, column: 12, endLine: 1, endColumn: 14, severity: 'error', code: 'unknown-modifier', message: expect.any(String) as unknown, locale: 'en', id: 'a' }]);
   });
 
+  it('writes each line terminator, control character and bidirectional control of a text report by its code point', async () => {
+    await files({
+      'd\u2028\u0085/en.json': '{"a\\nb\\u001b[31m": "x",\n"s t\\u00a0\\u200b\\ud83d\\ude00\\u061c\\u200e\\u200f\\u202a\\u202e\\u2066\\u2069": "y"}',
+      'd\u2028\u0085/cs.json': '{}',
+    });
+
+    // A space, a no-break space, a format character outside the bidirectional
+    // controls and an astral character are shown as themselves.
+    expect(await cli('d\u2028\u0085/{locale}.json')).toEqual({
+      code: 0,
+      out: [
+        'dU+2028U+0085/en.json:1:20  warning  `cs` has no message `aU+000AbU+001B[31m`.  missing-message',
+        'dU+2028U+0085/en.json:2:74  warning  `cs` has no message `s t\u00a0\u200b\u{1f600}U+061CU+200EU+200FU+202AU+202EU+2066U+2069`.  missing-message',
+        '',
+        '2 problems (0 errors, 2 warnings)',
+        '',
+      ].join('\n'),
+      err: '',
+    });
+    // JSON escapes them as its format does.
+    expect(JSON.parse((await cli('d\u2028\u0085/{locale}.json', '--format', 'json')).out)).toMatchObject([
+      { file: 'd\u2028\u0085/en.json', message: '`cs` has no message `a\nb\u001b[31m`.', id: 'a\nb\u001b[31m' },
+      { id: 's t\u00a0\u200b\u{1f600}\u061c\u200e\u200f\u202a\u202e\u2066\u2069' },
+    ]);
+  });
+
+  // Windows holds no control character below U+0020 in a name.
+  it.skipIf(process.platform === 'win32')('writes a path holding a line feed and an escape on one line of a text report', async () => {
+    await files({ 'e\n\u001b[2K.json': '{"x": "{{"}' });
+
+    expect((await cli('.')).out).toBe('eU+000AU+001B[2K.json:1:8  error  `{{` opens no placeholder: nothing closes it on its line, so it renders as text.  unclosed-placeholder\n\n1 problem (1 error, 0 warnings)\n');
+  });
+
+  it.skipIf(process.platform === 'win32')('names a file it cannot read on one line, its path written as a text report writes it', async () => {
+    const name = 'x\nforged finding  unknown-modifier\u001b[8m.json';
+    const shown = 'xU+000Aforged finding  unknown-modifierU+001B[8m.json';
+
+    await files({ 'd/en.json': '{"x": "{{"}', [`d/${name}`]: '{}' });
+    refused.add(name);
+
+    // The system's words repeat the path, so the whole line is written so.
+    expect((await cli('d')).err.split('\n').slice(0, 2)).toEqual([
+      `Cannot read d/${shown}: EACCES: permission denied, open '${join(cwd, 'd', shown)}'`,
+      expect.stringMatching(/^1 file has no locale/) as unknown,
+    ]);
+  });
+
   it('reads a locale given for every file, and modifiers the host registers', async () => {
     await files({ 'messages.json': '{"a": "{{n:plural; one:a; other:b;}} {{v:upper}}"}' });
 

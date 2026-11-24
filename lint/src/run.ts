@@ -7,7 +7,7 @@ import { hidden, readPattern, tagOf } from './locale';
 import type { Pattern, Placed, Reader, Reading } from './locale';
 import { lintMessage } from './message';
 import { intlPlurals } from './plural';
-import { readCatalogue, readFindings } from './read';
+import { oneLine, readCatalogue, readFindings } from './read';
 import type { Located } from './read';
 import { localeKey } from './tag';
 import type { Finding, Severity } from './types';
@@ -350,6 +350,9 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
   // Written with forward slashes on every platform, as a path in a
   // report is read across them.
   const shownAt = (path: string) => (relative(io.cwd, path) || '.').split(sep).join('/');
+  // On one line as a text report writes it, as the system's words may repeat
+  // the path.
+  const cannotRead = (path: string, error: unknown) => io.err(`${oneLine(`Cannot read ${path}: ${(error as Error).message}`)}\n`);
 
   for (const argument of positionals) {
     const pattern = patterns.get(argument);
@@ -387,14 +390,14 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
 
       for (const { file } of listed.sort((a, b) => byCode(a.order, b.order))) files.push(file);
     } catch (error) {
-      io.err(`Cannot read ${argument}: ${(error as Error).message}\n`);
+      cannotRead(argument, error);
       unreadable = true;
     }
   }
 
   for (const { path, real, placed, unread } of files) {
     if (unread) {
-      if (!unreadAt.has(real)) io.err(`Cannot read ${shownAt(path)}: ${(unread.error as Error).message}\n`);
+      if (!unreadAt.has(real)) cannotRead(shownAt(path), unread.error);
       unreadAt.add(real);
       unreadable = true;
       continue;
@@ -414,7 +417,7 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
     try {
       text = await readFile(path, 'utf8');
     } catch (error) {
-      if (!unreadAt.has(real)) io.err(`Cannot read ${file}: ${(error as Error).message}\n`);
+      if (!unreadAt.has(real)) cannotRead(file, error);
       unreadAt.add(real);
       unreadable = true;
 
@@ -485,7 +488,7 @@ export const run = async (argv: string[], io: Io): Promise<number> => {
   if (values.format === 'json') {
     io.out(`${JSON.stringify(shown, null, 2)}\n`);
   } else {
-    for (const { file, line, column, severity, message, code } of shown) io.out(`${file}:${line}:${column}  ${severity}  ${message}  ${code}\n`);
+    for (const { file, line, column, severity, message, code } of shown) io.out(`${oneLine(file)}:${line}:${column}  ${severity}  ${oneLine(message)}  ${code}\n`);
 
     const errors = shown.filter(({ severity }) => severity === 'error').length;
     const warnings = shown.length - errors;

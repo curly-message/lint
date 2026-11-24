@@ -88,6 +88,36 @@ fn code_point(value: u32) -> String {
     format!("U+{value:04X}")
 }
 
+/// A text as one line of a report holds it: each line terminator of the
+/// format's `line-term`, each control character and each bidirectional
+/// control written by its code point, so that no text a catalogue or a path
+/// holds ends the line, drives the terminal it is shown in, or reorders the
+/// rest of the line. The three sets are fixed, whatever the version of
+/// Unicode.
+pub(crate) fn one_line(text: &str) -> String {
+    text.chars()
+        .fold(String::with_capacity(text.len()), |mut line, char| {
+            if char.is_control()
+                || matches!(
+                    char,
+                    '\u{2028}'
+                        | '\u{2029}'
+                        | '\u{61c}'
+                        | '\u{200e}'
+                        | '\u{200f}'
+                        | '\u{202a}'..='\u{202e}'
+                        | '\u{2066}'..='\u{2069}'
+                )
+            {
+                line.push_str(&code_point(u32::from(char)));
+            } else {
+                line.push(char);
+            }
+
+            line
+        })
+}
+
 struct Key {
     start: usize,
     end: usize,

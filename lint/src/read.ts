@@ -30,9 +30,18 @@ const MAX_DEPTH = 512;
 
 const ESCAPES: Record<string, string> = { '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' };
 
+const codePoint = (char: string) => `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`;
+
 // A character as a report shows it: by its code point where it is invisible,
 // or would break the line the report is on.
-export const shown = (char: string) => (/[\p{C}\p{Z}]/u.test(char) ? `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}` : `\`${char}\``);
+export const shown = (char: string) => (/[\p{C}\p{Z}]/u.test(char) ? codePoint(char) : `\`${char}\``);
+
+// A text as one line of a report holds it: each line terminator of the
+// format's `line-term`, each control character and each bidirectional control
+// written by its code point, so that no text a catalogue or a path holds ends
+// the line, drives the terminal it is shown in, or reorders the rest of the
+// line. The three sets are fixed, whatever the version of Unicode.
+export const oneLine = (text: string) => text.replace(/[\u2028\u2029\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, codePoint);
 
 // Where the code unit at `index` of a string's value is written: past the
 // opening quote, and past the units each escape sequence before it is
