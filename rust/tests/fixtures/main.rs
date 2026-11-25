@@ -1,6 +1,7 @@
 //! Runs the fixture set at the repository's root, which every implementation
 //! of the linter runs: each case through the crate, with the plural rules
-//! the case names in place of a host's.
+//! the case names in place of a host's. A list of entries is also linted
+//! with no locale compared, which yields its findings but a comparison's.
 
 #![allow(
     clippy::unwrap_used,
@@ -17,8 +18,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use curly_message_lint::{
-    Category, EntriesOptions, Entry, Finding, Options, RULES, RuleType, Table, lint_entries,
-    lint_message, read_catalogue, read_findings,
+    CatalogueFinding, Category, EntriesOptions, Entry, Finding, Options, RULES, RuleType, Table,
+    lint_entries, lint_entries_uncompared, lint_message, read_catalogue, read_findings,
 };
 use libtest_mimic::{Arguments, Failed, Trial};
 use serde_json::{Value, json};
@@ -216,10 +217,9 @@ fn entries_case(case: &Value) -> Result<(), Failed> {
 
     given.source = options["source"].as_str();
 
-    let found = lint_entries(&entries, &given, &host(case.get("plurals")));
-
-    same(
-        &found
+    let plurals = host(case.get("plurals"));
+    let state = |found: Vec<CatalogueFinding>| -> Value {
+        found
             .iter()
             .map(|found| {
                 stated(
@@ -228,11 +228,41 @@ fn entries_case(case: &Value) -> Result<(), Failed> {
                     Some(found.entry),
                 )
             })
-            .collect(),
+            .collect()
+    };
+
+    same(
+        &state(lint_entries(&entries, &given, &plurals)),
         &case["findings"],
         "the findings",
+    )?;
+
+    // Linted with no locale compared with the source one, the list yields
+    // the same findings but those of a comparison.
+    let uncompared: Vec<Value> = case["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|found| !COMPARING.contains(&found["code"].as_str().unwrap()))
+        .cloned()
+        .collect();
+
+    same(
+        &state(lint_entries_uncompared(&entries, &given, &plurals)),
+        &json!(uncompared),
+        "the findings with no locale compared",
     )
 }
+
+// The codes only a comparison with the source locale finds.
+const COMPARING: &[&str] = &[
+    "missing-source",
+    "missing-message",
+    "orphan-message",
+    "parameter-mismatch",
+    "modifier-mismatch",
+    "missing-number-key",
+];
 
 fn read_case(case: &Value) -> Result<(), Failed> {
     let text = case["text"].as_str().unwrap();

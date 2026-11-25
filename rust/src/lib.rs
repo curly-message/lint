@@ -19,7 +19,7 @@ mod rules;
 mod tag;
 mod tree;
 
-pub use catalogue::{EntriesOptions, Entry, lint_entries};
+pub use catalogue::{EntriesOptions, Entry, lint_entries, lint_entries_uncompared};
 #[cfg(feature = "cldr")]
 pub use cldr::Cldr;
 pub use finding::{CatalogueFinding, Finding};
