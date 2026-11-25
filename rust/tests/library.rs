@@ -86,6 +86,14 @@ fn the_readme_names_the_version_of_unicode_the_lockfile_resolves() {
 }
 
 #[test]
+fn the_readme_installs_the_version_the_manifest_names() {
+    assert!(include_str!("../README.md").contains(&format!(
+        "\ncargo install curly-message-lint@{}\n",
+        env!("CARGO_PKG_VERSION")
+    )));
+}
+
+#[test]
 fn asks_a_host_about_the_numbers_the_fixture_set_names() {
     let probes = probes();
 
