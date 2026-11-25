@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use crate::plural::{Category, Plurals, RuleType, Rules};
+use crate::plural::{Category, KeptCategories, Plurals, RuleType, Rules};
 use crate::read::read_catalogue;
 use crate::tag::well_formed;
 
@@ -338,6 +338,13 @@ impl Rules for Found {
 }
 
 impl Plurals for Cldr {
+    // The rules are the crate's, the same for every `Cldr`.
+    fn kept(&self) -> Option<&KeptCategories> {
+        static KEPT: KeptCategories = KeptCategories::new();
+
+        Some(&KEPT)
+    }
+
     fn rules(&self, tag: &str, kind: RuleType) -> Option<Box<dyn Rules + '_>> {
         let data = data();
         let tag = tag.to_ascii_lowercase();
