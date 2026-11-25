@@ -165,11 +165,13 @@ jobs:
         run: cargo fmt --all --check
 
       # Once with the plural rules the crate carries and once without, so the
-      # code each leaves out is linted by the other.
+      # code each leaves out is linted by the other, and once for the target
+      # `wasm/` holds all its code for.
       - name: Clippy
         run: |
           cargo clippy --workspace --all-targets --locked -- -D warnings
           cargo clippy -p curly-message-lint --all-targets --no-default-features --locked -- -D warnings
+          cargo clippy -p curly-message-lint-wasm --target wasm32-unknown-unknown --locked -- -D warnings
 
       - name: Docs
         env:

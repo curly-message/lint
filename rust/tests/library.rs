@@ -10,9 +10,12 @@
     clippy::arithmetic_side_effects
 )]
 
+use std::cell::RefCell;
+
 use curly_message_lint::{
-    Category, Code, EntriesOptions, Entry, Located, NoPlurals, Options, RULES, RuleType, Scope,
-    Table, lint_entries, lint_message, locale_key, probes, read_catalogue, read_findings,
+    Category, Code, EntriesOptions, Entry, Located, NoPlurals, Options, Plurals, RULES, RuleType,
+    Rules, Scope, Table, lint_entries, lint_message, locale_key, probes, read_catalogue,
+    read_findings,
 };
 
 // A sequence that is the same on every run.
@@ -138,6 +141,52 @@ fn a_table_answers_for_a_locale_however_its_tag_is_written() {
             &table
         )
         .is_empty()
+    );
+}
+
+#[test]
+fn asks_a_host_only_for_a_tag_that_is_well_formed() {
+    struct Asking(RefCell<Vec<String>>);
+
+    impl Plurals for Asking {
+        fn rules(&self, tag: &str, _: RuleType) -> Option<Box<dyn Rules + '_>> {
+            self.0.borrow_mut().push(tag.to_owned());
+            None
+        }
+    }
+
+    let host = Asking(RefCell::default());
+    let tags = [
+        "en_US",
+        "sl-rozaj-biske-1994",
+        "en-u-ca-gregory-x-a",
+        "art-lojban",
+        "not a locale",
+        "abcd",
+        "en--us",
+        "i-klingon",
+        "x-private",
+        "en-u",
+        "de-1996-1996",
+        "en-a-bbb-a-ccc",
+    ];
+
+    for tag in tags {
+        lint_message(
+            "{{n:plural; one:a; other:b;}}",
+            &Options::default().locale(tag),
+            &host,
+        );
+    }
+
+    assert_eq!(
+        host.0.into_inner(),
+        [
+            "en-us",
+            "sl-rozaj-biske-1994",
+            "en-u-ca-gregory-x-a",
+            "art-lojban"
+        ]
     );
 }
 
@@ -342,6 +391,27 @@ fn reads_a_message_and_a_catalogue_far_larger_than_any_written() {
     let options = EntriesOptions::default();
 
     assert!(!lint_entries(&entries, &options, &NoPlurals).is_empty());
+}
+
+#[test]
+fn holds_no_room_a_finding_does_not_fill() {
+    let entries: Vec<Entry> = ["{{a:zz}} {{", "{{n:plural; one:a;}}", "{{x}}"]
+        .iter()
+        .enumerate()
+        .map(|(index, message)| Entry {
+            locale: if index == 1 { "cs" } else { "en" }.to_owned(),
+            id: format!("k{index}"),
+            message: (*message).to_owned(),
+        })
+        .collect();
+    let found = lint_entries(&entries, &EntriesOptions::default(), &NoPlurals);
+
+    assert!(found.len() >= 3);
+    assert!(
+        found
+            .iter()
+            .all(|found| found.finding.message.capacity() == found.finding.message.len())
+    );
 }
 
 #[cfg(feature = "cldr")]

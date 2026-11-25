@@ -22,9 +22,13 @@ impl Finding {
     pub(crate) fn new(
         code: Code,
         section: Option<&'static str>,
-        message: String,
+        mut message: String,
         (start, end): (usize, usize),
     ) -> Self {
+        // A message is written with `format!`, which leaves room it never
+        // fills, and a catalogue's findings are held until they are reported.
+        message.shrink_to_fit();
+
         Self {
             code,
             severity: code.rule().severity,

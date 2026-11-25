@@ -1,0 +1,35 @@
+[package]
+name = "curly-message-lint-wasm"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+description = "curly-message-lint as the WebAssembly module the npm packages run."
+license = "MIT"
+repository = "https://github.com/curly-message/lint"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+# The crate holds nothing off wasm32, where there is nothing to test.
+test = false
+doctest = false
+
+[dependencies]
+curly-message-lint = { path = "..", default-features = false }
+
+# The workspace's lints, but for `unsafe`, which an export and an import of a
+# WebAssembly module are written with: `src/abi.rs` alone allows it.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "deny"
+string_slice = "deny"
+arithmetic_side_effects = "deny"
+non_ascii_literal = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+dbg_macro = "deny"

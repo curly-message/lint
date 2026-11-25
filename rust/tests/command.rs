@@ -41,6 +41,8 @@ struct Memory {
     unreachable: BTreeSet<&'static str>,
     calls: Calls,
     out: String,
+    /// The longest text handed to `out` at once.
+    longest_out: usize,
     err: String,
 }
 
@@ -82,6 +84,7 @@ impl Memory {
             unreachable: BTreeSet::new(),
             calls: Calls::default(),
             out: String::new(),
+            longest_out: 0,
             err: String::new(),
         };
 
@@ -272,6 +275,7 @@ impl Host for Memory {
     }
 
     fn out(&mut self, text: &str) {
+        self.longest_out = self.longest_out.max(text.len());
         self.out.push_str(text);
     }
 
@@ -722,6 +726,35 @@ fn writes_json_with_format_json() {
             .1,
         "[]\n"
     );
+}
+
+#[test]
+fn writes_a_json_report_a_problem_at_a_time() {
+    let catalogue = format!(
+        "{{{}}}",
+        (0..100)
+            .map(|index| format!("\"m{index}\": \"{{{{\""))
+            .collect::<Vec<_>>()
+            .join(", ")
+    );
+    let mut host = Memory::new(&[("en.json", &catalogue)]);
+    let (code, out, _) = host.run(&["--format", "json", "{locale}.json"]);
+    let problems: Vec<&str> = out
+        .strip_prefix("[\n")
+        .and_then(|out| out.strip_suffix("\n]\n"))
+        .unwrap()
+        .split(",\n  {")
+        .collect();
+
+    assert_eq!(code, 1);
+    assert_eq!(problems.len(), 100);
+    assert!(
+        problems
+            .iter()
+            .all(|problem| problem.contains("\"id\": \"m"))
+    );
+    // Each text holds one problem and what joins it to the one before.
+    assert!(host.longest_out < out.len() / 50, "{}", host.longest_out);
 }
 
 #[test]
