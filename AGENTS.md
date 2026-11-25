@@ -48,10 +48,10 @@ JavaScript package, which runs the crate compiled to WebAssembly.
   run against the source compiles the core first, and `npm run dev` before
   it watches the TypeScript, which it does not compile again: a change under
   `rust/` while it watches takes `npm run build`.
-- **Release tags are namespaced by workspace** — `lint-v1.0.0`,
-  `eslint-plugin-v1.0.0` — and the publish workflow cuts them
-  (`.github/workflows/publish.yml`; the README's Releasing section says what
-  it does).
+- **Release tags are namespaced by directory** — `lint-v1.0.0`,
+  `eslint-plugin-v1.0.0`, `rust-v1.0.0` — and the publish workflows cut them
+  (`.github/workflows/publish.yml` for the workspaces, `publish-rust.yml` for
+  the crate; the README's Releasing section says what they do).
 - **The lockfile is written with npm 11** (`npx npm@11 install`). npm 10 fails
   to resolve the workspaces' peer dependencies, though it installs from the
   lockfile (`npm ci`) as CI's Node 22 does.
@@ -85,14 +85,14 @@ Tech stack of `rust/` — **ground truth, do not assume otherwise**:
 
 | | |
 |---|---|
-| Package | `curly-message-lint`, unreleased: a library and the `curly-lint` binary |
+| Package | `curly-message-lint`, a library and the `curly-lint` binary, released as a prerelease; the first version, `1.0.0-next.0`, was published by hand |
 | Language | Rust, edition 2024, no `unsafe`: the workspace forbids it, and `wasm/` alone denies it in its place, so that `wasm/src/abi.rs` can allow what an export and an import are written with |
 | Toolchains | Rust 1.88 and stable, on Linux, macOS and Windows; the library without `cldr` also builds for `wasm32-unknown-unknown` |
 | Tests | `cargo test`; the fixture runner through `libtest-mimic`, a case a test |
 | Lint | rustfmt and Clippy, at the lints `Cargo.toml` denies: a panic, an index, a slice of a `str`, unchecked arithmetic, a character outside ASCII in a literal, a write to the standard streams |
 | Features | `cldr`, default: the plural rules of the Unicode CLDR as data in the crate (`cldr/`, under the Unicode License v3), which the binary requires |
 | Dependencies | `curly-message-parser`, and `unicode-properties` for the characters a report shows by code point; `serde_json`, `sha2` and `libtest-mimic` for the tests alone |
-| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml`; a change under `rust/` runs the npm jobs and benchmarks too, which build it |
+| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml`, `publish-rust.yml`; a change under `rust/` runs the npm jobs and benchmarks too, which build it |
 
 Commands, run from the root:
 

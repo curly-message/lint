@@ -17,7 +17,7 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 | --- | --- | --- |
 | [`lint/`](./lint) | `@curly-message/lint` | The rules, a library over them, and the `curly-lint` command for JSON catalogues: the crate compiled to WebAssembly, for Node, Bun and Deno. |
 | [`eslint-plugin/`](./eslint-plugin) | `@curly-message/eslint-plugin` | The rules a single message decides, as ESLint rules, for JSON and for messages in JavaScript and TypeScript. |
-| [`rust/`](./rust) | `curly-message-lint` | The rules, the catalogue reader and the `curly-lint` command in Rust: a crate and a native program, unreleased, and the code the npm packages run. |
+| [`rust/`](./rust) | `curly-message-lint` | The rules, the catalogue reader and the `curly-lint` command in Rust: a crate and a native program, released as a prerelease, and the code the npm packages run. |
 
 The library's README lists every rule. The command line runs all of them,
 those that compare one locale with another included. The plugin runs the ones a
@@ -52,7 +52,7 @@ crate is measured the same way, by the commands its README names.
 
 ## Releasing
 
-A release is cut from `main` by the **Publish** workflow
+A workspace's release is cut from `main` by the **Publish** workflow
 (`.github/workflows/publish.yml`, started by hand with the workspace to
 publish and the kind of release). A workspace's changelog's pending section
 names the version it will be released as — `### 1.1.0 (Unreleased)` — so a
@@ -94,6 +94,36 @@ first version of each, `1.0.0-next.0`, is published by hand from `main` by a
 maintainer of the scope (`npm ci && npm run build && npm publish --workspace lint --access public --tag next`,
 then the same for `eslint-plugin`); the workflow refuses to run for a package
 the registry does not know.
+
+### The crate
+
+The crate is released by the **Rust publish** workflow
+(`.github/workflows/publish-rust.yml`, started by hand with the kind of
+release), reading `rust/CHANGELOG.md`'s pending section and the release types
+as the workspaces' workflow does. crates.io has no dist-tags: `next`
+publishes a prerelease version (`1.1.0-next.0`, then `.1`), which Cargo
+resolves only for a requirement that names a prerelease, as npm installs a
+`next` version only when asked for it. The workflow runs the test matrix,
+bumps `version` in `rust/Cargo.toml`, the crate's entry in `rust/Cargo.lock`
+and the version `rust/README.md` installs, builds, writes the benchmark of
+the release build into `rust/BENCH.md`, verifies the package (`cargo package`
+builds the crate from the files it ships), commits, tags (`rust-v1.1.0`),
+pushes, publishes to crates.io and publishes a GitHub release carrying the
+changelog section, never marked as the repository's latest, which stays an
+npm package's. It runs in the same three jobs, with the same App and the same
+`release` environment, and the release job publishes only a crate whose
+files hash as the verified one's did.
+
+crates.io holds no token: the workflow is the crate's
+[trusted publisher](https://rust-lang.github.io/rfcs/3691-trusted-publishing-cratesio.html),
+registered in the crate's settings on crates.io (repository owner
+`curly-message`, repository `lint`, workflow `publish-rust.yml`, environment
+`release`), and `rust-lang/crates-io-auth-action` exchanges the job's OIDC
+token for a token it revokes when the job ends. A trusted publisher can be
+registered only for a crate that exists, so the first version,
+`1.0.0-next.0`, was published by hand from `main` by an owner with an API
+token (`cd rust && cargo publish --locked -p curly-message-lint`); the
+workflow refuses to run for a crate crates.io does not know.
 
 ## License
 
