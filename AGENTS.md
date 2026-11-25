@@ -70,7 +70,7 @@ Tech stack — **ground truth, do not assume otherwise**:
 
 | | |
 |---|---|
-| Packages | `@curly-message/lint` and `@curly-message/eslint-plugin`, unreleased; the first version of each, `1.0.0-next.0`, is published by hand |
+| Packages | `@curly-message/lint` and `@curly-message/eslint-plugin`, released as prereleases; the first version of each, `1.0.0-next.0`, was published by hand |
 | Language | TypeScript, ESM only |
 | Package manager | npm 11, workspaces |
 | Build | tsup |
