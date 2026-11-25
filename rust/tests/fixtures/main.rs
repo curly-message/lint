@@ -2,6 +2,8 @@
 //! of the linter runs: each case through the crate, with the plural rules
 //! the case names in place of a host's. A list of entries is also linted
 //! with no locale compared, which yields its findings but a comparison's.
+//! A string a file holds is also located by its escapes alone, as a host
+//! that counts UTF-16 code units locates it.
 
 #![allow(
     clippy::unwrap_used,
@@ -18,8 +20,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use curly_message_lint::{
-    CatalogueFinding, Category, EntriesOptions, Entry, Finding, Options, RULES, RuleType, Table,
-    lint_entries, lint_entries_uncompared, lint_message, read_catalogue, read_findings,
+    CatalogueFinding, Category, EntriesOptions, Entry, Finding, Located, Options, RULES, RuleType,
+    Table, lint_entries, lint_entries_uncompared, lint_message, read_catalogue, read_findings,
 };
 use libtest_mimic::{Arguments, Failed, Trial};
 use serde_json::{Value, json};
@@ -264,6 +266,47 @@ const COMPARING: &[&str] = &[
     "missing-number-key",
 ];
 
+// Where each code unit of a string's value is written, as a host that counts
+// UTF-16 code units locates it from the string's escapes alone: past the
+// opening quote, and past the units each sequence before it is written with
+// beyond the one it reads as. Each `\u` sequence spells one unit, so a pair
+// of them, which spells a character past the Basic Multilingual Plane, is
+// two sequences of six.
+fn offsets_by_escapes(text: &str, string: &Located) -> Vec<usize> {
+    // The unit each sequence reads as, and the units written beyond those
+    // read, summed up to it.
+    let mut escapes: Vec<(usize, usize)> = Vec::new();
+    let mut extra = 0;
+
+    for escape in string.escapes() {
+        let unit = string.value[..escape.index].encode_utf16().count();
+        let char = string.value[escape.index..].chars().next().unwrap();
+        let written = escape.end - escape.start;
+        let sequences = if char.len_utf16() == 2 {
+            assert_eq!(written, 12);
+            vec![6, 6]
+        } else {
+            vec![written]
+        };
+
+        for (index, width) in sequences.into_iter().enumerate() {
+            extra += width - 1;
+            escapes.push((unit + index, extra));
+        }
+    }
+
+    (0..=string.value.encode_utf16().count())
+        .map(|unit| {
+            let before = escapes.partition_point(|(at, _)| *at < unit);
+
+            units(text, string.start)
+                + 1
+                + unit
+                + before.checked_sub(1).map_or(0, |last| escapes[last].1)
+        })
+        .collect()
+}
+
 fn read_case(case: &Value) -> Result<(), Failed> {
     let text = case["text"].as_str().unwrap();
     let result = read_catalogue(text);
@@ -319,6 +362,11 @@ fn read_case(case: &Value) -> Result<(), Failed> {
 
         found.push(units(text, string.offset_of(string.value.len())));
         same(&json!(found), offsets, "the offsets")?;
+        same(
+            &json!(offsets_by_escapes(text, string)),
+            offsets,
+            "the offsets read off the escapes",
+        )?;
     }
 
     same(

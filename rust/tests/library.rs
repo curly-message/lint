@@ -11,8 +11,8 @@
 )]
 
 use curly_message_lint::{
-    Category, Code, EntriesOptions, Entry, NoPlurals, Options, RULES, RuleType, Scope, Table,
-    lint_entries, lint_message, locale_key, probes, read_catalogue, read_findings,
+    Category, Code, EntriesOptions, Entry, Located, NoPlurals, Options, RULES, RuleType, Scope,
+    Table, lint_entries, lint_message, locale_key, probes, read_catalogue, read_findings,
 };
 
 // A sequence that is the same on every run.
@@ -240,8 +240,57 @@ fn reads_any_text_as_a_message_or_a_catalogue() {
                 string.end - 1,
                 "{text:?}"
             );
+
+            // Each escape spells the character it stands for where the
+            // value's bytes are located, in the order the file writes them.
+            let mut after = string.start;
+
+            for escape in string.escapes() {
+                let char = string.value[escape.index..].chars().next().unwrap();
+
+                assert!(escape.start > after && escape.end < string.end, "{text:?}");
+                assert_eq!(
+                    text.get(escape.start..=escape.start),
+                    Some("\\"),
+                    "{text:?}"
+                );
+                assert_eq!(string.offset_of(escape.index), escape.start, "{text:?}");
+                assert_eq!(
+                    string.offset_of(escape.index + char.len_utf8()),
+                    escape.end,
+                    "{text:?}"
+                );
+                after = escape.end - 1;
+            }
         }
     }
+}
+
+#[test]
+fn says_where_each_escape_of_a_string_is_written() {
+    let catalogue = read_catalogue(r#"{"a": "x\n\u00e9\ud83d\ude00\"y", "b": "\u00e9"}"#).unwrap();
+    let escapes = |string: &Located| -> Vec<(usize, usize, usize)> {
+        string
+            .escapes()
+            .map(|escape| (escape.index, escape.start, escape.end))
+            .collect()
+    };
+
+    assert_eq!(catalogue.strings[0].value, "x\n\u{e9}\u{1f600}\"y");
+    // A pair of `\u` sequences spells one character, and is one escape.
+    assert_eq!(
+        escapes(&catalogue.strings[0]),
+        [(1, 8, 10), (2, 10, 16), (4, 16, 28), (8, 28, 30)]
+    );
+    assert_eq!(escapes(&catalogue.strings[1]), [(0, 40, 46)]);
+    assert_eq!(
+        escapes(&read_catalogue(r#""\u00e9 \u00e9""#).unwrap().strings[0]),
+        [(0, 1, 7), (3, 8, 14)]
+    );
+    assert_eq!(
+        escapes(&read_catalogue("\"\u{e9}\"").unwrap().strings[0]),
+        []
+    );
 }
 
 #[test]

@@ -14,6 +14,8 @@ Message Format in Rust, as a library and as the `curly-lint` command.
 * **`read_catalogue`** reads a JSON catalogue and says where each string
   stands, past its escape sequences, up to 512 levels deep and up to
   the first string that is not well-formed Unicode text.
+  Each string lists its escape sequences, `Located::escapes`, by which a
+  host that counts other units than bytes locates it.
 * **`curly-lint`** is the command of `@curly-message/lint` as a native
   program: the same arguments, report and exit codes.
 * **Plural rules are handed in.** A rule asks them through `Plurals`: `Cldr`,

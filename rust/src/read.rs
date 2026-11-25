@@ -40,6 +40,48 @@ impl Located {
             .saturating_add(index)
             .saturating_add(extra)
     }
+
+    /// Each escape sequence the file spells a character of the value with,
+    /// in the order the file writes them.
+    pub fn escapes(&self) -> impl Iterator<Item = Escape> + '_ {
+        let mut before = 0_usize;
+
+        self.escapes.iter().map(move |&(ends, extra)| {
+            let width = self
+                .value
+                .get(..ends)
+                .and_then(|value| value.chars().next_back())
+                .map_or(0, char::len_utf8);
+            let index = ends.saturating_sub(width);
+            let start = self
+                .start
+                .saturating_add(1)
+                .saturating_add(index)
+                .saturating_add(before);
+            let end = start
+                .saturating_add(width)
+                .saturating_add(extra.saturating_sub(before));
+
+            before = extra;
+
+            Escape { index, start, end }
+        })
+    }
+}
+
+/// An escape sequence a catalogue file spells a character of a string with:
+/// a backslash and what follows it, or the two `\u` sequences of a surrogate
+/// pair, which spell one character between them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct Escape {
+    /// The byte index in the string's value where the character the
+    /// sequence spells starts.
+    pub index: usize,
+    /// The byte offset in the file of the sequence's backslash.
+    pub start: usize,
+    /// The byte offset in the file just past the sequence.
+    pub end: usize,
 }
 
 /// A member a later one of the same name replaces, so its value is never
