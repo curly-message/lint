@@ -50,7 +50,7 @@
     "catalogue"
   ],
   "author": "Jarda Svoboda",
-  "license": "MIT",
+  "license": "MIT AND Unicode-3.0",
   "bugs": {
     "url": "https://github.com/curly-message/spec/issues"
   },
