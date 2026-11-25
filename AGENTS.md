@@ -206,7 +206,14 @@ build over a child process.
 - **A linter never throws on a message**: any string is a message it can
   read, and a file that is not JSON is a finding, not a crash. In Rust that
   is no panic on any input: the lints deny what can raise one, and the
-  binary exits 2 on a fault it did not foresee.
+  binary exits 2 on a fault it did not foresee. The npm library throws one
+  thing, `CoreError`, where the core could not finish whatever the message
+  was: a runtime with no WebAssembly, the 2 GiB the core's memory may grow
+  to, a stack that ran out within the call, plural rules or a file system
+  that threw what names no code of the system; its `cause` is what was
+  thrown, and does not always say which. The instance is then
+  dropped and the next call starts another; the command says it on standard
+  error and exits 2, and the plugin lets it through.
 
 ## Robustness
 
@@ -216,6 +223,20 @@ editors on every keystroke.
 - **Bounded work.** What a rule does grows with the message, never with a
   value outside it. A rule that walks the tree walks it once, and a catalogue
   is read up to a million messages, however often it holds one object.
+- **The core's memory is bounded and given back.** A module's memory only
+  grows, so the core may grow to 2 GiB (`MAX_MEMORY`,
+  `rust/wasm/src/memory.rs`), where an address still reads in JavaScript as
+  the non-negative number it is. A list of entries crosses into it in
+  batches of `BATCH` code units, each entry weighing `ENTRY` more, one entry
+  larger than a batch crossing alone, and is linted once; findings leave in
+  answers of about 1 MiB, each cut at a finding. The core holds the text in
+  UTF-8, and `lint/tests/core.spec.ts` holds lists of 50 000 to 400 000
+  entries within twice their text and the text of their findings, a
+  finding's holding what it quotes, beside 400 bytes a message and 300 a
+  finding. An instance a call left above
+  `KEPT`, 16 MiB, is dropped for the next call to start a new one. Its
+  allocator takes half the memory again whenever it has to grow, or what is
+  left below the most, since a runtime collects garbage on each growth.
 - **Prototype keys are names.** A catalogue's `__proto__` member is a member;
   read an object's own data members, or read onto a null prototype.
 - **No host code.** The linter calls no function a catalogue holds, an
