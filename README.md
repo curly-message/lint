@@ -79,6 +79,19 @@ and the last takes that build as files. Of the three, only the second runs a
 dependency's code, and only the last holds the credentials, in the `release`
 environment.
 
+A release that stops after its tag exists is finished by **Re-run failed
+jobs** on its run, before any further release of the workspace and within 30
+days of the run or the build artifact's retention, whichever ends first: the
+re-run reuses the run's version and build, makes the same commit, finds it
+tagged, pushes nothing, and publishes to npm and to GitHub what is not there
+yet. Re-running all jobs does not finish it, since a new build writes another
+benchmark than the tag holds. A release that stops before its tag exists is
+dispatched again, and cuts the same version. A publish that fails saying the
+version is published already, right after npm took it, is re-run once more. A
+release that cannot be finished this way — a defect in the workflow's own
+steps after the push, or a run past that window — stays as far as it got, its
+tag and whatever npm took, and the next version is released.
+
 The commit, the tag and the release are made as a GitHub App, whose client ID
 and private key the repository holds as the `APP_CLIENT_ID` variable and the
 `APP_PRIVATE_KEY` secret; kept in the `release` environment alone, which only
@@ -112,7 +125,10 @@ pushes, publishes to crates.io and publishes a GitHub release carrying the
 changelog section, never marked as the repository's latest, which stays an
 npm package's. It runs in the same three jobs, with the same App and the same
 `release` environment, and the release job publishes only a crate whose
-files hash as the verified one's did.
+files hash as the verified one's did. A release of the crate that stops once
+its tag exists is finished as a workspace's is, by re-running its failed
+jobs, and a version crates.io holds already passes where its files hash as
+the build's; one that stops before its tag exists is dispatched again.
 
 crates.io holds no token: the workflow is the crate's
 [trusted publisher](https://rust-lang.github.io/rfcs/3691-trusted-publishing-cratesio.html),
