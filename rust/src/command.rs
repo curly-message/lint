@@ -1142,9 +1142,15 @@ pub fn run<H: Host + ?Sized>(argv: &[String], host: &mut H) -> i32 {
         if shown.is_empty() {
             host.out("[]\n");
         } else {
-            let listed: Vec<String> = shown.iter().map(|problem| problem.json()).collect();
+            // A problem at a time, as the text format writes a line at a
+            // time, so that the report is never held whole.
+            for (index, problem) in shown.iter().enumerate() {
+                let before = if index == 0 { "[\n" } else { ",\n" };
 
-            host.out(&format!("[\n{}\n]\n", listed.join(",\n")));
+                host.out(&format!("{before}{}", problem.json()));
+            }
+
+            host.out("\n]\n");
         }
     } else {
         for Problem {

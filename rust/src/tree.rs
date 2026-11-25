@@ -118,8 +118,17 @@ fn placeholder<'t>(node: &NodeRef<'t>, depth: usize, tree: &mut Tree) -> Vec<Nod
     values
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How many messages were read.
+    pub(crate) static READ: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Reads a message, however deep it nests.
 pub(crate) fn read(message: &str) -> Tree {
+    #[cfg(test)]
+    READ.with(|read| read.set(read.get().saturating_add(1)));
+
     let parsed = cst(message);
     let mut tree = Tree::default();
     // The spans still to read, the one being read last: a stack of its own

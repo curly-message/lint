@@ -125,31 +125,94 @@ impl<T> Ordered<T> {
     }
 }
 
-/// The placeholders resolution reaches that name a key, by the key.
-type Names = Ordered<Vec<Placeholder>>;
+/// What a message reads of one parameter, as the source locale's is
+/// compared with it.
+struct Parameter {
+    name: Box<str>,
+    /// Where the parameter is first read.
+    first: (usize, usize),
+    /// How it is shown, each way once (see `showing`).
+    shown: Box<[Box<str>]>,
+    /// Where its first plural selection points, where it has one.
+    plural: Option<(usize, usize)>,
+    /// The numbers its plural selections give text of their own, where it
+    /// has one.
+    numbers: Box<[f64]>,
+    /// Those numbers, and the numbers its `eq` comparisons spell, by their
+    /// bits, where it has one.
+    keyed: Box<[u64]>,
+}
 
-fn names_of(tree: &Tree) -> Names {
-    let mut names: Names = Ordered::new();
+/// The parameters a message reads, in the order it first reads each: what
+/// a comparison takes of a message, which is all a catalogue holds of it.
+type Parameters = Box<[Parameter]>;
+
+fn parameters_of(tree: &Tree, modifiers: Modifiers<'_>) -> Parameters {
+    let mut index: HashMap<&str, usize> = HashMap::new();
+    let mut named: Vec<Vec<&Placeholder>> = Vec::new();
 
     for placeholder in resolvable(tree) {
         let Some(key) = &placeholder.key else {
             continue;
         };
 
-        match names.values.get_mut(&key.name) {
-            Some(named) => named.push(placeholder.clone()),
-            None => names.insert(&key.name, vec![placeholder.clone()]),
+        match index
+            .get(key.name.as_str())
+            .and_then(|at| named.get_mut(*at))
+        {
+            Some(placeholders) => placeholders.push(placeholder),
+            None => {
+                index.insert(&key.name, named.len());
+                named.push(vec![placeholder]);
+            }
         }
     }
 
-    names
+    named
+        .iter()
+        .filter_map(|placeholders| {
+            let first = placeholders.first()?;
+            let plural = selecting(placeholders, PLURALS, modifiers)
+                .next()
+                .map(Placeholder::at);
+            let (numbers, keyed) = if plural.is_some() {
+                let numbers: Box<[f64]> =
+                    numbers_of(selecting(placeholders, PLURALS, modifiers), false).collect();
+                let keyed = numbers
+                    .iter()
+                    .copied()
+                    .chain(numbers_of(
+                        selecting(placeholders, &["eq"], modifiers),
+                        true,
+                    ))
+                    .map(bits)
+                    .collect();
+
+                (numbers, keyed)
+            } else {
+                (Box::default(), Box::default())
+            };
+
+            Some(Parameter {
+                name: first.key.as_ref()?.name.as_str().into(),
+                first: (first.start, first.end),
+                shown: showing(placeholders, modifiers)
+                    .into_iter()
+                    .map(Box::from)
+                    .collect(),
+                plural,
+                numbers,
+                keyed,
+            })
+        })
+        .collect()
 }
 
-/// A message a locale is compared by, and its names, read where it is
-/// compared.
+/// A message a locale is compared by, and the parameters it reads where it
+/// is compared.
 struct Read {
     entry: usize,
-    names: Option<Names>,
+    parameters: Option<Parameters>,
 }
 
 // Each locale by its key, named as its first message writes it, or as
@@ -405,7 +468,7 @@ pub(crate) fn lint_entries_comparing(
                     id,
                     Read {
                         entry,
-                        names: compared.then(|| names_of(&tree)),
+                        parameters: compared.then(|| parameters_of(&tree, modifiers)),
                     },
                 );
             }
@@ -457,7 +520,7 @@ pub(crate) fn lint_entries_comparing(
             let compared = locale
                 .messages
                 .first()
-                .filter(|opening| opening.names.is_some());
+                .filter(|opening| opening.parameters.is_some());
 
             if let Some(opening) = compared {
                 report.make(
@@ -482,7 +545,7 @@ pub(crate) fn lint_entries_comparing(
         }
 
         for (id, read) in reference.messages.iter() {
-            if read.names.is_some() && other.messages.get(id).is_none() {
+            if read.parameters.is_some() && other.messages.get(id).is_none() {
                 report.make(
                     read.entry,
                     Code::MissingMessage,
@@ -493,7 +556,7 @@ pub(crate) fn lint_entries_comparing(
         }
 
         for (id, read) in other.messages.iter() {
-            let Some(names) = &read.names else {
+            let Some(parameters) = &read.parameters else {
                 continue;
             };
 
@@ -510,15 +573,14 @@ pub(crate) fn lint_entries_comparing(
                 continue;
             };
 
-            if let Some(compared_names) = &compared.names {
+            if let Some(source_parameters) = &compared.parameters {
                 let source = report.locale(compared.entry).to_owned();
 
                 compare(
                     &source,
-                    compared_names,
+                    source_parameters,
                     read.entry,
-                    names,
-                    modifiers,
+                    parameters,
                     &mut report,
                 );
             }
@@ -539,7 +601,7 @@ fn selection_of<'p>(placeholder: &'p Placeholder, modifiers: Modifiers<'_>) -> O
 // How the placeholders of a parameter show its value, each way once: with
 // the formatting modifier or the host's modifier one names, or as it is. A
 // selection shows nothing of it.
-fn showing<'p>(placeholders: &'p [Placeholder], modifiers: Modifiers<'_>) -> Vec<&'p str> {
+fn showing<'p>(placeholders: &[&'p Placeholder], modifiers: Modifiers<'_>) -> Vec<&'p str> {
     let mut shown: Vec<&str> = Vec::new();
     let mut seen: HashSet<&str> = HashSet::new();
 
@@ -562,11 +624,11 @@ fn showing<'p>(placeholders: &'p [Placeholder], modifiers: Modifiers<'_>) -> Vec
 }
 
 fn selecting<'p>(
-    placeholders: &'p [Placeholder],
+    placeholders: &'p [&'p Placeholder],
     selections: &'p [&str],
     modifiers: Modifiers<'p>,
 ) -> impl Iterator<Item = &'p Placeholder> {
-    placeholders.iter().filter(move |placeholder| {
+    placeholders.iter().copied().filter(move |placeholder| {
         selection_of(placeholder, modifiers).is_some_and(|name| selections.contains(&name))
     })
 }
@@ -589,31 +651,39 @@ fn numbers_of<'p>(
 
 const PLURALS: &[&str] = &["plural", "ordinal"];
 
+fn by_name(parameters: &[Parameter]) -> HashMap<&str, &Parameter> {
+    parameters
+        .iter()
+        .map(|parameter| (&*parameter.name, parameter))
+        .collect()
+}
+
 fn compare(
     source: &str,
-    reference: &Names,
+    reference: &[Parameter],
     entry: usize,
-    names: &Names,
-    modifiers: Modifiers<'_>,
+    parameters: &[Parameter],
     report: &mut Report<'_>,
 ) {
-    for (name, _) in reference.iter() {
-        if names.get(name).is_none() {
+    let (referenced, read) = (by_name(reference), by_name(parameters));
+
+    for compared in reference {
+        if !read.contains_key(&*compared.name) {
             report.make(
                 entry,
                 Code::ParameterMismatch,
                 Some("9.2"),
-                format!("This message never reads `{name}`, which the `{source}` message reads."),
+                format!(
+                    "This message never reads `{}`, which the `{source}` message reads.",
+                    compared.name
+                ),
             );
         }
     }
 
-    for (name, placeholders) in names.iter() {
-        let Some(first) = placeholders.first() else {
-            continue;
-        };
-
-        let Some(compared) = reference.get(name) else {
+    for parameter in parameters {
+        let name = &parameter.name;
+        let Some(compared) = referenced.get(&**name) else {
             report.make_at(
                 entry,
                 Code::ParameterMismatch,
@@ -621,19 +691,18 @@ fn compare(
                 format!(
                     "`{name}` is read here and never in the `{source}` message, so a payload written for that message does not carry it."
                 ),
-                (first.start, first.end),
+                parameter.first,
             );
             continue;
         };
 
-        let shown = showing(placeholders, modifiers);
-        let reshown = showing(compared, modifiers);
+        let (shown, reshown) = (&parameter.shown, &compared.shown);
         let differs = shown.iter().any(|how| !reshown.contains(how))
             || reshown.iter().any(|how| !shown.contains(how));
 
         // A message that only selects by a parameter shows it no other way.
         if !shown.is_empty() && !reshown.is_empty() && differs {
-            let spell = |hows: &[&str]| {
+            let spell = |hows: &[Box<str>]| {
                 hows.iter()
                     .map(|how| {
                         if how.is_empty() {
@@ -652,32 +721,22 @@ fn compare(
                 Some("11"),
                 format!(
                     "`{name}` is shown {} here and {} in the `{source}` message.",
-                    spell(&shown),
-                    spell(&reshown)
+                    spell(shown),
+                    spell(reshown)
                 ),
-                (first.start, first.end),
+                parameter.first,
             );
         }
 
-        let Some(at) = selecting(placeholders, PLURALS, modifiers)
-            .next()
-            .map(Placeholder::at)
-        else {
+        let Some(at) = parameter.plural else {
             continue;
         };
 
         // Text of its own for a number, given by the plural selection or by
         // one that compares the value with the number's key.
-        let mut keyed: HashSet<u64> =
-            numbers_of(selecting(placeholders, PLURALS, modifiers), false)
-                .chain(numbers_of(
-                    selecting(placeholders, &["eq"], modifiers),
-                    true,
-                ))
-                .map(bits)
-                .collect();
+        let mut keyed: HashSet<u64> = parameter.keyed.iter().copied().collect();
 
-        for number in numbers_of(selecting(compared, PLURALS, modifiers), false) {
+        for &number in &compared.numbers {
             // Each number the source keys is reported once.
             if !keyed.insert(bits(number)) {
                 continue;
@@ -704,6 +763,7 @@ mod tests {
 
     use super::{EntriesOptions, Entry, lint_entries};
     use crate::plural::NoPlurals;
+    use crate::tree::READ;
 
     thread_local! {
         /// How many ids were copied out of a locale's messages.
@@ -726,6 +786,24 @@ mod tests {
                 })
             })
             .collect()
+    }
+
+    #[test]
+    fn each_message_is_read_once() {
+        let entries: Vec<Entry> = (0..20)
+            .flat_map(|pair| {
+                ["cs", "en", "de"].into_iter().map(move |locale| Entry {
+                    locale: locale.to_owned(),
+                    id: pair.to_string(),
+                    message: "{{n:plural; 1:a; other:b;}} {{name}}".to_owned(),
+                })
+            })
+            .collect();
+
+        READ.with(|read| read.set(0));
+        lint_entries(&entries, &EntriesOptions::default(), &NoPlurals);
+
+        assert_eq!(READ.with(Cell::get), entries.len());
     }
 
     #[test]

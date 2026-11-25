@@ -17,10 +17,14 @@ Message Format in Rust, as a library and as the `curly-lint` command.
   Each string lists its escape sequences, `Located::escapes`, by which a
   host that counts other units than bytes locates it.
 * **`curly-lint`** is the command of `@curly-message/lint` as a native
-  program: the same arguments, report and exit codes.
+  program: the same arguments, report and exit codes. It hands its `Host`
+  the report a problem at a time, as JSON as well as text, so that the
+  report is never held whole.
 * **Plural rules are handed in.** A rule asks them through `Plurals`: `Cldr`,
   the rules of the Unicode CLDR 48 the crate carries with the `cldr` feature,
-  a `Table` of rules stated as data, or a host's own.
+  a `Table` of rules stated as data, or a host's own. They are asked only
+  for a locale tag that is well-formed, as `Intl` takes one, so a host's
+  `Intl` is never handed one it would refuse.
 * **Offsets count bytes** of the message or the file, where the TypeScript
   package counts UTF-16 code units; the command's columns count UTF-16 code
   units, as an editor does.

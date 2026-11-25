@@ -151,6 +151,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "curly-message-lint-wasm"
+version = "0.0.0"
+dependencies = [
+ "curly-message-lint",
+]
+
+[[package]]
 name = "curly-message-parser"
 version = "1.0.0-next.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
