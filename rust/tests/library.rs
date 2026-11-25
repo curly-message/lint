@@ -13,9 +13,9 @@
 use std::cell::RefCell;
 
 use curly_message_lint::{
-    Category, Code, EntriesOptions, Entry, Located, NoPlurals, Options, Plurals, RULES, RuleType,
-    Rules, Scope, Table, lint_entries, lint_message, locale_key, probes, read_catalogue,
-    read_findings,
+    Category, Code, EntriesOptions, Entry, KeptCategories, Located, NoPlurals, Options, Plurals,
+    RULES, RuleType, Rules, Scope, Table, lint_entries, lint_message, locale_key, probes,
+    read_catalogue, read_findings,
 };
 
 // A sequence that is the same on every run.
@@ -142,6 +142,136 @@ fn a_table_answers_for_a_locale_however_its_tag_is_written() {
         )
         .is_empty()
     );
+}
+
+// Rules that answer `one` for 1 and `other` otherwise, and count how often
+// they are asked for and asked to select.
+struct Counted {
+    kept: Option<KeptCategories>,
+    asked: RefCell<Vec<String>>,
+    selected: RefCell<usize>,
+}
+
+impl Counted {
+    fn new(kept: bool) -> Self {
+        Self {
+            kept: kept.then(KeptCategories::new),
+            asked: RefCell::default(),
+            selected: RefCell::default(),
+        }
+    }
+}
+
+impl Rules for &Counted {
+    fn categories(&self) -> Vec<Category> {
+        vec![Category::One, Category::Other]
+    }
+
+    fn select(&self, number: f64) -> Category {
+        *self.selected.borrow_mut() += 1;
+
+        if number == 1.0 {
+            Category::One
+        } else {
+            Category::Other
+        }
+    }
+}
+
+impl Plurals for Counted {
+    fn rules(&self, tag: &str, _: RuleType) -> Option<Box<dyn Rules + '_>> {
+        self.asked.borrow_mut().push(tag.to_owned());
+
+        (tag != "xx").then(|| Box::new(self) as Box<dyn Rules + '_>)
+    }
+
+    fn kept(&self) -> Option<&KeptCategories> {
+        self.kept.as_ref()
+    }
+}
+
+#[test]
+fn asks_a_host_that_keeps_what_it_answered_once_for_each_locale_and_type() {
+    let selection = "{{n:plural; one:a; few:b; other:c;}}";
+    let ordinal = "{{n:ordinal; one:a; other:c;}}";
+
+    for kept in [false, true] {
+        let host = Counted::new(kept);
+        let mut found = Vec::new();
+
+        for (message, locale) in [
+            (selection, "en"),
+            (selection, "EN"),
+            (selection, "xx"),
+            (ordinal, "en"),
+            (selection, "en"),
+            (selection, "xx"),
+            (ordinal, "en_GB"),
+            (ordinal, "en"),
+        ] {
+            found.push(lint_message(
+                message,
+                &Options::default().locale(locale),
+                &host,
+            ));
+        }
+
+        let asked = host.asked.into_inner();
+
+        if kept {
+            assert_eq!(asked, ["en", "xx", "en", "en-gb"]);
+        } else {
+            assert_eq!(asked, ["en", "en", "xx", "en", "en", "xx", "en-gb", "en"]);
+        }
+
+        // What is kept answers as what is asked again does.
+        assert_eq!(
+            found.iter().map(Vec::len).collect::<Vec<_>>(),
+            [1, 1, 0, 0, 1, 0, 0, 0]
+        );
+    }
+}
+
+#[test]
+fn keeps_what_a_host_answered_for_at_most_64_locales_and_types() {
+    let host = Counted::new(true);
+    let locale = |index: usize| format!("en-{}", 1000 + index);
+
+    for index in 0..64 {
+        lint_message(
+            "{{n:plural; other:c;}}",
+            &Options::default().locale(&locale(index)),
+            &host,
+        );
+    }
+
+    let selected = *host.selected.borrow();
+
+    // The 64 are kept: none is asked again, and selects nothing more.
+    for index in 0..64 {
+        lint_message(
+            "{{n:plural; other:c;}}",
+            &Options::default().locale(&locale(index)),
+            &host,
+        );
+    }
+
+    assert_eq!(host.asked.borrow().len(), 64);
+    assert_eq!(*host.selected.borrow(), selected);
+
+    // A 65th starts over, so the first is asked again.
+    lint_message(
+        "{{n:plural; other:c;}}",
+        &Options::default().locale(&locale(64)),
+        &host,
+    );
+    lint_message(
+        "{{n:plural; other:c;}}",
+        &Options::default().locale(&locale(0)),
+        &host,
+    );
+
+    assert_eq!(host.asked.borrow()[64..], [locale(64), locale(0)]);
 }
 
 #[test]

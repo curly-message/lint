@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use crate::tag::{locale_key, well_formed};
 
@@ -78,6 +79,60 @@ pub trait Plurals {
     /// well-formed Unicode locale identifier, as ECMA-402's `Intl` takes one;
     /// a host has no rules for any other.
     fn rules(&self, tag: &str, kind: RuleType) -> Option<Box<dyn Rules + '_>>;
+
+    /// Where what the rules answered for a locale is kept from one call to
+    /// the next, so that a locale's rules are asked about the [`probes`]
+    /// once, not once a call; none by default. Give one only where the rules
+    /// of a tag answer the same for as long as `self` lives.
+    fn kept(&self) -> Option<&KeptCategories> {
+        None
+    }
+}
+
+/// What a host answered for a locale and a type: the categories its rules
+/// answer, or none where it has no rules for the locale.
+type Answer = Option<Arc<Categories>>;
+
+/// How many locales and types a [`KeptCategories`] holds, past which it
+/// starts over.
+const KEPT: usize = 64;
+
+/// What a host's rules answered for each locale and type, kept across calls
+/// by a [`Plurals`] that gives it from [`Plurals::kept`]: for at most 64
+/// locales and types, each with the numbers among [`probes`] each category
+/// takes, past which it lets go of them all and starts over.
+#[derive(Debug, Default)]
+pub struct KeptCategories {
+    known: Mutex<BTreeMap<(bool, String), Answer>>,
+}
+
+impl KeptCategories {
+    /// Holds nothing yet.
+    pub const fn new() -> Self {
+        Self {
+            known: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    // No lock is held while the host is asked, which may lint from inside
+    // its rules.
+    fn get(&self, kind: RuleType, tag: &str) -> Option<Answer> {
+        let known = self.known.lock().unwrap_or_else(PoisonError::into_inner);
+
+        known
+            .get(&(kind == RuleType::Ordinal, tag.to_owned()))
+            .cloned()
+    }
+
+    fn insert(&self, kind: RuleType, tag: &str, answer: Answer) {
+        let mut known = self.known.lock().unwrap_or_else(PoisonError::into_inner);
+
+        if known.len() >= KEPT {
+            known.clear();
+        }
+
+        known.insert((kind == RuleType::Ordinal, tag.to_owned()), answer);
+    }
 }
 
 /// A host with no plural rules, which the rules that read a locale's then
@@ -193,15 +248,15 @@ pub(crate) type Categories = HashMap<Category, Vec<f64>>;
 /// catalogue asks about each once.
 pub(crate) struct Asked<'a> {
     plurals: &'a dyn Plurals,
-    probes: Vec<f64>,
-    known: HashMap<(RuleType, String), Option<Categories>>,
+    probes: Option<Vec<f64>>,
+    known: HashMap<(RuleType, String), Answer>,
 }
 
 impl<'a> Asked<'a> {
     pub fn new(plurals: &'a dyn Plurals) -> Self {
         Self {
             plurals,
-            probes: probes(),
+            probes: None,
             known: HashMap::new(),
         }
     }
@@ -222,25 +277,53 @@ impl<'a> Asked<'a> {
             .or_insert_with_key(|(kind, tag)| {
                 well_formed(tag)?;
 
-                let rules = plurals.rules(tag, *kind)?;
-                let mut answer: Categories = rules
-                    .categories()
-                    .into_iter()
-                    .map(|category| (category, Vec::new()))
-                    .collect();
+                let kept = plurals.kept();
 
-                for probe in probes.iter().copied() {
-                    if *kind == RuleType::Ordinal && probe.fract() != 0.0 {
-                        continue;
-                    }
-
-                    if let Some(taken) = answer.get_mut(&rules.select(probe)) {
-                        taken.push(probe);
-                    }
+                if let Some(answer) = kept.and_then(|kept| kept.get(*kind, tag)) {
+                    return answer;
                 }
 
-                Some(answer)
+                let answer = asked(
+                    *plurals,
+                    tag,
+                    *kind,
+                    probes.get_or_insert_with(self::probes),
+                );
+
+                if let Some(kept) = kept {
+                    kept.insert(*kind, tag, answer.clone());
+                }
+
+                answer
             })
-            .as_ref()
+            .as_deref()
     }
+}
+
+// The categories the host's rules for a locale answer, each with the probes
+// it takes.
+fn asked(
+    plurals: &dyn Plurals,
+    tag: &str,
+    kind: RuleType,
+    probes: &[f64],
+) -> Option<Arc<Categories>> {
+    let rules = plurals.rules(tag, kind)?;
+    let mut answer: Categories = rules
+        .categories()
+        .into_iter()
+        .map(|category| (category, Vec::new()))
+        .collect();
+
+    for probe in probes.iter().copied() {
+        if kind == RuleType::Ordinal && probe.fract() != 0.0 {
+            continue;
+        }
+
+        if let Some(taken) = answer.get_mut(&rules.select(probe)) {
+            taken.push(probe);
+        }
+    }
+
+    Some(Arc::new(answer))
 }
