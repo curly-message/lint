@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::tag::locale_key;
+use crate::tag::{locale_key, well_formed};
 
 /// A plural category of the Unicode CLDR, which section 11.5 keys by.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -74,7 +74,9 @@ pub trait Rules {
 /// The plural rules a host has.
 pub trait Plurals {
     /// The rules for a locale, asked by its key ([`locale_key`]), and none
-    /// where the host has no rules for it.
+    /// where the host has no rules for it. A tag is asked only where it is a
+    /// well-formed Unicode locale identifier, as ECMA-402's `Intl` takes one;
+    /// a host has no rules for any other.
     fn rules(&self, tag: &str, kind: RuleType) -> Option<Box<dyn Rules + '_>>;
 }
 
@@ -218,6 +220,8 @@ impl<'a> Asked<'a> {
         known
             .entry((kind, tag))
             .or_insert_with_key(|(kind, tag)| {
+                well_formed(tag)?;
+
                 let rules = plurals.rules(tag, *kind)?;
                 let mut answer: Categories = rules
                     .categories()

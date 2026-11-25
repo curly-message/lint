@@ -34,8 +34,9 @@ one npm workspace per JavaScript package, and the Rust crate beside them.
   workspace with its own build, tests, README, CHANGELOG, LICENSE and version
   line. Run every npm command from the root.
 - **`rust/` is a Cargo workspace of its own**, outside npm's: the crate, and
-  `bench/`, the program its benchmark measures, which is not published. Run
-  every cargo command from `rust/`. The two implementations share no code:
+  two members that are not published, `bench/`, the program its benchmark
+  measures, and `wasm/`, the crate without `cldr` behind a hand-written ABI.
+  Run every cargo command from `rust/`. The two implementations share no code:
   what holds them to one answer is `fixtures/`.
 - **Release tags are namespaced by workspace** — `lint-v1.0.0`,
   `eslint-plugin-v1.0.0` — and the publish workflow cuts them
@@ -74,7 +75,7 @@ Tech stack of `rust/` — **ground truth, do not assume otherwise**:
 | | |
 |---|---|
 | Package | `curly-message-lint`, unreleased: a library and the `curly-lint` binary |
-| Language | Rust, edition 2024, no `unsafe` (the workspace forbids it) |
+| Language | Rust, edition 2024, no `unsafe`: the workspace forbids it, and `wasm/` alone denies it in its place, so that `wasm/src/abi.rs` can allow what an export and an import are written with |
 | Toolchains | Rust 1.88 and stable, on Linux, macOS and Windows; the library without `cldr` also builds for `wasm32-unknown-unknown` |
 | Tests | `cargo test`; the fixture runner through `libtest-mimic`, a case a test |
 | Lint | rustfmt and Clippy, at the lints `Cargo.toml` denies: a panic, an index, a slice of a `str`, unchecked arithmetic, a character outside ASCII in a literal, a write to the standard streams |
@@ -99,7 +100,7 @@ Commands, run from `rust/`:
 |---------|--------------|
 | `cargo test`, `cargo test --no-default-features` | the suite, with the plural rules the crate carries and without them |
 | `cargo fmt --all --check`, `cargo fmt --all` | report, or fix, what the formatting contract reports |
-| `cargo clippy --workspace --all-targets -- -D warnings` | the lints; once more with `-p curly-message-lint --no-default-features` |
+| `cargo clippy --workspace --all-targets -- -D warnings` | the lints; once more with `-p curly-message-lint --no-default-features`, and once with `-p curly-message-lint-wasm --target wasm32-unknown-unknown` |
 | `cargo build --lib --no-default-features --target wasm32-unknown-unknown` | the library as a host with plural rules of its own takes it |
 | `sh bench/prepare.sh && node bench/harness.mjs` | build the release into `bench/dist/`, then the benchmark (`bench/rows.mjs`) |
 | `node bench/harness.mjs --compare <dir>` | the same, beside the crate prepared at `<dir>` — what `bench.yml` runs on a PR |
@@ -130,6 +131,7 @@ Map of `rust/`:
 | `src/bin/curly-lint/` | the binary: the host over the file system and the standard streams |
 | `tests/` | the suite (see *Tests*) |
 | `bench/` | the benchmark's program, its rows, and the crate's copies of the harness and of `check/` |
+| `wasm/` | the binding: `src/abi.rs`, the exports, the imports and the allocator; `src/wire.rs`, a request and an answer; `src/plurals.rs` and `src/host.rs`, the plural rules and the command's host over the imports |
 
 The plugin is `eslint-plugin/src/index.ts`: the rules a single message
 decides, with or without its locale. The rules that compare locales stay the
@@ -177,6 +179,10 @@ build over a child process.
   shows a character or its code point. A fixture holds no character two
   supported hosts read otherwise: none assigned after the oldest of their
   versions of Unicode, and none yet unassigned but a noncharacter.
+- **`unsafe` stays in one file.** The crate has none. An export and an
+  import of a WebAssembly module cannot be written without it, so
+  `rust/wasm/src/abi.rs` holds every one of the binding, and nothing else of
+  `rust/wasm/` may.
 - **No payload.** Every rule is decidable from a message, its locale, or a
   catalogue. What a payload decides is the parser's to report while it
   resolves.
