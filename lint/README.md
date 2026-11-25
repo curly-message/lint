@@ -363,4 +363,6 @@ special case, which is why it is a warning (section 11.5).
 
 ## License
 
-[MIT](./LICENSE)
+[MIT](./LICENSE). The tables of character properties the compiled core holds
+are generated from the Unicode Character Database, under the
+[Unicode License v3](./THIRD-PARTY-NOTICES.md).
