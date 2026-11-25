@@ -156,6 +156,14 @@ jobs:
         with:
           node-version: 24
 
+      # The library's build compiles the core for WebAssembly, from nothing a
+      # run before this one built.
+      - name: Setup Rust
+        working-directory: .
+        run: |
+          rustup toolchain install stable --profile minimal --target wasm32-unknown-unknown --no-self-update
+          rustup default stable
+
       # From the root: run in a subdirectory, git apply drops every path
       # outside it without a word.
       - name: Apply the bump
@@ -184,7 +192,12 @@ jobs:
       # Each release records what its build costs, measured on the runner that
       # builds it; a row that fails stops the release here.
       - name: Benchmark
-        run: node ../bench/harness.mjs > BENCH.md
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          node ../bench/harness.mjs > BENCH.md
+          # The library's build holds the core, which the compiler decides.
+          if [ "$PACKAGE" = lint ]; then printf '\nThe core was compiled by %s.\n' "$(rustc -V)" >> BENCH.md; fi
 
       # One tar file rather than the artifact's own zip, which drops each
       # file's mode, a bin's executable bit among them. The integrity is what

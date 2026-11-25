@@ -60,6 +60,12 @@ jobs:
         with:
           node-version: 24
 
+      # A workspace's build compiles the core for WebAssembly, on the runner's
+      # Rust, so a change to the crate is one to each workspace.
+      - name: Setup Rust
+        if: matrix.package != 'rust'
+        run: rustup target add wasm32-unknown-unknown
+
       # The harness on rows that fail wherever two measurements share a
       # process, so a table below is one whose sides were measured apart, and
       # on each base it may be given: none, one with rows, and a path that

@@ -17,11 +17,17 @@ payload decides is what the parser reports while it resolves.
 ## Installation
 
 ```bash
-npm install --save-dev @curly-message/lint @curly-message/parser
+npm install --save-dev @curly-message/lint
 ```
 
-The parser is a peer dependency: the linter reads a message with the parser
-the project resolves it with, so the two agree on what a placeholder is.
+The rules are those of the Rust crate
+[`curly-message-lint`](../rust),
+which the package holds compiled to WebAssembly, the format's parser with it:
+there is nothing else to install, and the package and the crate answer alike.
+It runs on Node 22 or later, Bun and Deno 2, with the WebAssembly each has,
+and asks the runtime's `Intl` for a locale's plural rules.
+[`THIRD-PARTY-NOTICES.md`](./THIRD-PARTY-NOTICES.md)
+lists what the compiled core holds and the terms of each.
 
 ## The command line
 
@@ -128,9 +134,10 @@ path that is not there, cannot be read. A link to a path that is there but
 cannot be reached is a directory the command cannot read, or a file it cannot
 read where the command would read one at its path. The command exits 1 where
 it finds an error, 2 where its arguments are wrong, a path cannot be read, a
-pattern names no file or its output cannot be written, as on a full disk, and
-0 otherwise. A reader that closes its output early, as `head` does, ends the
-report but changes none of these.
+pattern names no file, its output cannot be written, as on a full disk, or
+the core could not finish, which it says on standard error, and 0 otherwise.
+A reader that closes its output early, as `head` does, ends the report but
+changes none of these.
 
 ## The library
 
@@ -154,7 +161,8 @@ lintCatalogue({
 | `lintCatalogue(catalogue, options?)` | Lints a tree of messages for each locale: each message with its locale, then every locale against the source one. `options.source` names it. Two tags that differ only in case, or in `_` for `-`, are one locale, and a finding names each locale as the catalogue writes it. A source that is no locale of the catalogue is a [`missing-source`](#missing-source) error. |
 | `lintEntries(entries, options?)` | The same over a list of `{ locale, id, message }`, its locales matched the same way. A finding's `entry` is the index of its message in the list. `options.locales` names the locales the catalogue is written for, so one with no message yet lacks every message of the source locale. An unpaired surrogate in `options.source` or in a locale of `options.locales` reads as U+FFFD, as a command's arguments converted lossily do. |
 | `entriesOf(catalogue)`, `flatten(tree)` | The messages a catalogue or a tree holds, in order, each string leaf by its path joined with dots, up to a million for each tree. Only an object's own enumerable data members are read, so no accessor runs, and an object a tree holds inside itself is read where it is first reached. |
-| `readCatalogue(text)` | Reads a JSON catalogue as `JSON.parse` does, past a byte order mark, up to 512 levels deep and up to a string that is not well-formed Unicode text, and says where each string stands in the text, past its escape sequences, and which members a later one of the same name replaced. |
+| `readCatalogue(text)` | Reads a JSON catalogue as `JSON.parse` does, past a byte order mark, up to 512 levels deep and up to a string an escape sequence of which makes text that is not well-formed Unicode, and says where each string stands in the text, past its escape sequences, and which members a later one of the same name replaced. The text is read as a file holds it, in UTF-8, so a surrogate written as itself that pairs with no other reads as U+FFFD. |
+| `CoreError` | What a call throws where the core could not finish it, whatever the message: as where the runtime has no WebAssembly, the core ran out of the 2 GiB of memory it may grow to, the runtime's stack ran out within the call, or the runtime's `Intl` or file system threw what names no code of the system. Its `cause` is what was thrown, which may not say which of them it was. |
 | `RULES` | Every rule: its code, severity, scope and the section of the specification it rests on. |
 
 A finding carries its `code`, its `severity`, an English `message` saying
@@ -165,6 +173,17 @@ the message. A finding in a catalogue also names its message's `locale` and
 one defined twice — spans nothing, from 0 to 0. Findings come in one order:
 by `entry` in a catalogue, then by `start`, then by `end`, then by their
 rule's place in `RULES`, then by `message`, comparing UTF-16 code units.
+
+No message, list or text makes a function throw, whatever it holds: what a
+call finds in it is a finding. A call the core could not finish throws a
+`CoreError` and has no findings to give; the next call starts the core anew.
+`curly-lint` says so on standard error and exits 2.
+
+The finding of a file that is not JSON shows the character its reading stops
+at by its code point, as `U+0085`, where Unicode gives it a general category
+of Other or Separator, by the version of Unicode the core was compiled with,
+which [the crate's README](../rust/README.md#the-command-line)
+names, whatever the runtime's is.
 
 ## Rules
 
@@ -273,7 +292,7 @@ tree handed to `lintCatalogue` that holds more than a million messages — an
 object it holds in several places counted in each — reported on the last
 message read. Text that is not well-formed Unicode, holding a surrogate that
 pairs with no other, is no message and no id: a file is read up to the first
-such string, escaped or not, reported where that surrogate is written, and a
+such string, reported where an escape sequence writes that surrogate, and a
 list handed to `lintEntries`, or a tree to `lintCatalogue`, up to the first
 message whose locale, id or text is such text, reported on it. `lintMessage`,
 and the ESLint plugin, find nothing in such a message. What a file that is

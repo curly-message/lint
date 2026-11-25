@@ -12,6 +12,7 @@ type Assert<T extends true> = T;
 
 export type Surface = [
   Assert<Equal<keyof typeof Shipped, keyof typeof Source>>,
+  Assert<Equal<typeof Shipped.CoreError, typeof Source.CoreError>>,
   Assert<Equal<typeof Shipped.entriesOf, typeof Source.entriesOf>>,
   Assert<Equal<typeof Shipped.flatten, typeof Source.flatten>>,
   Assert<Equal<typeof Shipped.lintCatalogue, typeof Source.lintCatalogue>>,

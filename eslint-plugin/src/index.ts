@@ -167,11 +167,14 @@ const reportsOf = (context: Rule.RuleContext): Report[] => {
   const reports: Report[] = [];
 
   for (const { node, text, start, end } of messagesOf(sourceCode, settings)) {
+    const findings = lintMessage(text, { locale: settings.locale, modifiers: settings.modifiers, intl: settings.intl });
+
+    // Only a message with findings is placed in the source.
+    if (!findings.length) continue;
+
     const at = locator(sourceCode, node, text);
 
-    for (const found of lintMessage(text, { locale: settings.locale, modifiers: settings.modifiers, intl: settings.intl })) {
-      reports.push({ code: found.code, message: found.message, ...span(found, at, start, end) });
-    }
+    for (const found of findings) reports.push({ code: found.code, message: found.message, ...span(found, at, start, end) });
   }
 
   byFile.set(cacheKey, reports);

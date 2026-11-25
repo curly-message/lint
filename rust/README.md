@@ -14,8 +14,9 @@ $ curly-lint "locales/{locale}/{namespace}.json"
 locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and this selection has no `many` option, so those take the fallback chain.  missing-category
 ```
 
-It answers what [`@curly-message/lint`](../lint) answers: both run the cases
-of [`fixtures/`](../fixtures), the linter's contract as data, and the command
+[`@curly-message/lint`](../lint), the npm package, is this crate compiled to
+WebAssembly, so it answers what the crate answers. Both run the cases of
+[`fixtures/`](../fixtures), the linter's contract as data, and the command
 takes the same arguments, writes the same report and exits with the same
 codes.
 
@@ -45,12 +46,12 @@ curly-lint "locales/{locale}/{namespace}.json"
 ```
 
 `curly-lint --help` prints the arguments, and the
-[TypeScript package's README](../lint/README.md#the-command-line) says how a
+[npm package's README](../lint/README.md#the-command-line) says how a
 pattern reads a file's locale and namespace off its path, what the report
 holds and what each exit code means. What differs here:
 
 - **Plural rules are the crate's**, those of the Unicode CLDR 48, where the
-  TypeScript command asks the `Intl` of the runtime it runs on. A locale one
+  npm package's command asks the `Intl` of the runtime it runs on. A locale one
   knows and the other does not is linted with its rules by one and without
   them by the other: `bh` and `tw`, which the CLDR reads as `bho` and `ak`,
   have rules here and none in Node 22.
@@ -61,10 +62,9 @@ holds and what each exit code means. What differs here:
   what is not, so the file is reported as one that cannot be read.
 - **Which characters a report shows by code point**, as `U+0085`, follows the
   general categories of the Unicode version `unicode-properties` carries,
-  Unicode 18.0 as the crate's lockfile resolves it, where the TypeScript
-  command reads those of its runtime. A code point one version assigns and
-  the other does not yet is shown as itself by one and by its code point by
-  the other.
+  Unicode 18.0 as the crate's lockfile resolves it, whatever version the
+  system has. The npm package's command, compiled from the same lockfile,
+  shows the same ones.
 
 ## The library
 
@@ -114,7 +114,7 @@ assert_eq!((catalogue.strings[0].start, catalogue.strings[0].end), (7, 25));
 A finding carries its `code`, its `severity`, an English `message` saying
 what is wrong and what happens instead, the `section` of the specification it
 rests on where one does, and `start` and `end`, a range of bytes of the
-message, the unit a `str` is indexed by. The fixtures and the TypeScript
+message, the unit a `str` is indexed by. The fixtures and the npm
 package count UTF-16 code units, and so do the columns `curly-lint` prints,
 as an editor does. A finding about a whole message spans nothing, from 0 to
 0. Findings come in one order: by `entry` in a catalogue, then by `start`,
@@ -123,7 +123,9 @@ comparing UTF-16 code units.
 
 No function of the library panics on a message, a list of entries or a text,
 and none reads a file or writes anywhere: the command does, through its host.
-The crate holds no `unsafe` code.
+The crate holds no `unsafe` code. `wasm/` beside it in the repository, the binding the npm package is built
+from, is a crate of its own that is not published, and holds the
+`unsafe` its exports and its imports need.
 
 ## Features
 
@@ -134,12 +136,12 @@ The crate holds no `unsafe` code.
 Without it, `default-features = false`, the library is the rules over the
 plural rules it is handed, a `Table` or a `Plurals` of the host's: what a
 build for `wasm32-unknown-unknown` takes, where the host has plural rules of
-its own.
+its own, as the npm package's build does with those of `Intl`.
 
 ## Rules
 
 Each rule is described, with what it finds and what to write instead, in the
-[TypeScript package's README](../lint/README.md#rules).
+[npm package's README](../lint/README.md#rules).
 
 | Code | Severity | Section | What it finds |
 | --- | --- | --- | --- |

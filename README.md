@@ -15,18 +15,25 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 
 | Path | Package | What it is |
 | --- | --- | --- |
-| [`lint/`](./lint) | `@curly-message/lint` | The rules, a library over them, and the `curly-lint` command for JSON catalogues. |
+| [`lint/`](./lint) | `@curly-message/lint` | The rules, a library over them, and the `curly-lint` command for JSON catalogues: the crate compiled to WebAssembly, for Node, Bun and Deno. |
 | [`eslint-plugin/`](./eslint-plugin) | `@curly-message/eslint-plugin` | The rules a single message decides, as ESLint rules, for JSON and for messages in JavaScript and TypeScript. |
-| [`rust/`](./rust) | `curly-message-lint` | The same rules, catalogue reader and `curly-lint` command in Rust: a crate and a native program, unreleased. |
+| [`rust/`](./rust) | `curly-message-lint` | The rules, the catalogue reader and the `curly-lint` command in Rust: a crate and a native program, unreleased, and the code the npm packages run. |
 
 The library's README lists every rule. The command line runs all of them,
 those that compare one locale with another included. The plugin runs the ones a
 single message decides, since ESLint hands a rule one file at a time.
 
+The rules are written once, in the crate. `rust/wasm/` binds it for
+WebAssembly, and the library's build compiles that and holds it in its
+bundle, so `npm test`, `npm run bench` and a release each need Rust with the
+`wasm32-unknown-unknown` target (`rustup target add wasm32-unknown-unknown`)
+beside Node.
+
 [`fixtures/`](./fixtures) is the linter's contract as data: messages, lists of
 entries and catalogue files, each with the findings a linter answers for it,
 and the plural rules it is read with in place of the host's. The library's
-suite and the crate's each run every case, and the set's README says what a
+suite and the crate's each run every case, the library's through the crate it
+holds compiled to WebAssembly, and the set's README says what a
 runner in another language does with it.
 
 Issues are filed in the family's shared tracker,
@@ -55,7 +62,9 @@ dist-tag, and the run is refused unless the bump arrives at the version the
 section names. `next` publishes a prerelease of that same version —
 `1.1.0-next.0`, then `.1` — under the `next` dist-tag and leaves the section
 open. The workflow runs the test matrix, bumps the version, cuts the section
-where the release closes it, builds, writes the benchmark of the build into
+where the release closes it, builds, the library's core compiled from clean
+by the runner's stable Rust, which the library's `BENCH.md` names, writes the
+benchmark of the build into
 the workspace's `BENCH.md`, commits, tags (`lint-v1.1.0`,
 `eslint-plugin-v1.1.0`), pushes, publishes to npm, and publishes a GitHub
 release carrying that changelog section.
