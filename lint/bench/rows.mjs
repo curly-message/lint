@@ -176,6 +176,20 @@ const uncompared = () => {
   };
 };
 
+// A process that loads the library and lints one message: what the first
+// call costs beyond every later one, the core decoded, compiled and
+// instantiated, with what the runtime takes to start.
+const first = () => {
+  const library = new URL('../dist/index.js', import.meta.url).href;
+  const script = `import { lintMessage } from ${JSON.stringify(library)}; if (lintMessage('{{').length !== 1) process.exit(1);`;
+
+  return () => {
+    const { status, stderr } = spawnSync(process.execPath, ['--input-type=module', '--eval', script], { encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'] });
+
+    if (status !== 0) throw new Error(`the process exited ${status}: ${stderr}`);
+  };
+};
+
 export default [
   { name: 'dist/*.js', kind: 'size', run: () => bundle().length },
   { name: 'dist/*.js, gzipped', kind: 'size', run: () => gzipSync(bundle(), { level: 9 }).length },
@@ -185,6 +199,7 @@ export default [
   { name: 'curly-lint: file system calls, a directory given as it is, over the same tree', kind: 'count', run: () => walked('.') },
   { name: 'curly-lint: a report of 20 000 findings, written to a regular file', kind: 'time', run: reported },
   { name: 'curly-lint: 5 000 messages in two locales, beside a file of a third that is not JSON', kind: 'time', run: uncompared },
+  { name: 'lintMessage: one message, in a process that loads the library for it', kind: 'time', run: first },
   { name: 'lintMessage: five catalogue messages, with their locale', kind: 'time', run: () => () => {
     for (const [, message] of MESSAGES) lintMessage(message, { locale: 'cs' });
   } },
