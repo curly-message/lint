@@ -623,6 +623,53 @@ fn reads_a_file_as_the_pattern_that_reaches_it_does() {
 }
 
 #[test]
+fn gives_locale_to_the_files_whose_paths_hold_none_under_the_namespaces_a_pattern_places() {
+    let mut host = Memory::new(&[
+        ("locales/en/admin.json", r#"{"title": "Users"}"#),
+        ("locales/en/shop.json", r#"{"title": "Cart"}"#),
+    ]);
+
+    assert_eq!(
+        host.run(&["locales/en/{namespace}.json", "--locale", "en"]),
+        (0, String::new(), String::new())
+    );
+    assert_eq!(
+        host.run(&["locales/en", "--locale", "en"]),
+        (1, "locales/en/shop.json:1:11  error  `title` is defined again in `en`, so one of the two messages is never read.  duplicate-id\n\n1 problem (1 error, 0 warnings)\n".to_owned(), String::new())
+    );
+}
+
+#[test]
+fn reads_a_catalogue_two_patterns_reach_once_by_the_first_of_them() {
+    let mut host = Memory::new(&[
+        ("locales/en/common.json", r#"{"hi": "Hi", "bye": "Bye"}"#),
+        ("locales/cs/common.json", r#"{"hi": "Ahoj"}"#),
+    ]);
+
+    assert_eq!(
+        host.run(&["locales/en/{namespace}.json", PATTERN, "--locale", "en"]),
+        (0, "locales/en/common.json:1:21  warning  `cs` has no message `common.bye`.  missing-message\n\n1 problem (0 errors, 1 warning)\n".to_owned(), String::new())
+    );
+}
+
+#[test]
+fn reads_each_pattern_over_its_base_whichever_other_pattern_reads_it_too() {
+    let mut host = Memory::new(&[
+        ("locales/en.json", r#"{"hi": "Hi"}"#),
+        ("locales/en/admin.json", r#"{"t": "{{"}"#),
+    ]);
+
+    assert_eq!(
+        host.run(&["locales/{locale}.json", PATTERN]),
+        (
+            1,
+            format!("locales/en/admin.json:1:8  {UNCLOSED}\n\n1 problem (1 error, 0 warnings)\n"),
+            String::new()
+        )
+    );
+}
+
+#[test]
 fn says_once_that_a_file_has_no_locale() {
     let mut host = Memory::new(&[("messages.json", r#"{"a": "A"}"#)]);
 
@@ -796,6 +843,74 @@ fn compares_nothing_under_the_namespace_of_a_file_that_is_not_json() {
     ]);
 
     assert!(host.run(&[PATTERN]).1.contains("locales/en/common.json:1:25  error  `common.a.b` is defined again in `en`, so one of the two messages is never read.  duplicate-id"));
+
+    // Another locale's file is not JSON.
+    let mut host = Memory::new(&[
+        ("locales/en/common.json", r#"{"hi": "Hello"}"#),
+        ("locales/en/other.json", r#"{"bye": "Bye"}"#),
+        ("locales/cs/common.json", r#"{"hi": "Ahoj",}"#),
+        ("locales/cs/other.json", "{}"),
+    ]);
+
+    assert_eq!(
+        host.run(&[PATTERN]),
+        (1, "locales/cs/common.json:1:15  error  Expected a string, found `}`.  unreadable-catalogue\nlocales/en/other.json:1:9  warning  `cs` has no message `other.bye`.  missing-message\n\n2 problems (1 error, 1 warning)\n".to_owned(), String::new())
+    );
+}
+
+#[test]
+fn compares_what_a_file_that_is_not_json_leaves_known_in_the_source_locale_too() {
+    let mut host = Memory::new(&[
+        ("a/en/common.json", r#"{"hi": "Hi"}"#),
+        ("a/cs/common.json", r#"{"hi":"#),
+        ("a/cs/other.json", r#"{"x": "X"}"#),
+        ("b/en/common.json", r#"{"hi":"#),
+        ("b/cs/common.json", r#"{"hi": "Ahoj"}"#),
+        ("b/cs/other.json", r#"{"x": "X"}"#),
+    ]);
+    let mut found = |pattern: &str| {
+        let (code, out, err) = host.run(&[pattern, "--format", "json"]);
+        let problems: serde_json::Value = serde_json::from_str(&out).unwrap();
+        let problems: Vec<String> = problems
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|problem| {
+                format!(
+                    "{} {}",
+                    problem["file"].as_str().unwrap(),
+                    problem["code"].as_str().unwrap()
+                )
+            })
+            .collect();
+
+        (code, problems, err)
+    };
+
+    // Another locale's file is not JSON.
+    assert_eq!(
+        found("a/{locale}/{namespace}.json"),
+        (
+            1,
+            vec![
+                "a/cs/common.json unreadable-catalogue".to_owned(),
+                "a/cs/other.json orphan-message".to_owned()
+            ],
+            String::new()
+        )
+    );
+    // The source locale's only file is not JSON.
+    assert_eq!(
+        found("b/{locale}/{namespace}.json"),
+        (
+            1,
+            vec![
+                "b/cs/other.json orphan-message".to_owned(),
+                "b/en/common.json unreadable-catalogue".to_owned()
+            ],
+            String::new()
+        )
+    );
 }
 
 #[test]
@@ -883,6 +998,103 @@ fn reads_a_locale_written_with_either_mark_and_refuses_one_that_is_none() {
 
     assert_eq!(code, 2);
     assert!(err.contains("`fr`"), "{err}");
+}
+
+#[test]
+fn finds_the_source_locale_written_in_any_case_with_either_mark() {
+    let mut host = Memory::new(&[
+        ("locales/en-us/common.json", r#"{"hi": "Hi", "bye": "Bye"}"#),
+        ("locales/cs/common.json", r#"{"hi": "Ahoj"}"#),
+    ]);
+
+    for source in ["en-US", "en_US"] {
+        assert_eq!(
+            host.run(&[PATTERN, "--source", source]),
+            (0, "locales/en-us/common.json:1:21  warning  `cs` has no message `common.bye`.  missing-message\n\n1 problem (0 errors, 1 warning)\n".to_owned(), String::new()),
+            "{source}"
+        );
+    }
+}
+
+#[test]
+fn reports_a_locale_two_paths_write_two_ways_and_reads_it_as_one() {
+    let mut host = Memory::new(&[
+        ("a/en-us.json", r#"{"hi": "Hi"}"#),
+        ("b/en-US.json", r#"{"bye": "Bye"}"#),
+    ]);
+    let argv = ["a/{locale}.json", "b/{locale}.json"];
+
+    assert_eq!(
+        host.run(&argv),
+        (0, "b/en-US.json:1:9  warning  `en-US` is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.  duplicate-locale\n\n1 problem (0 errors, 1 warning)\n".to_owned(), String::new())
+    );
+
+    // A spelling under which no message is read is reported on the first
+    // message of its locale: one whose only file holds none, or is not JSON.
+    let reported = "a/en-us.json:1:8  warning  `en-US`, under which no message was read, is `en-us` written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.  duplicate-locale";
+
+    host.files(&[("b/en-US.json", "{}")]);
+    assert_eq!(
+        host.run(&argv),
+        (
+            0,
+            format!("{reported}\n\n1 problem (0 errors, 1 warning)\n"),
+            String::new()
+        )
+    );
+    host.files(&[("b/en-US.json", r#"{"bye":"#)]);
+    assert_eq!(
+        host.run(&argv),
+        (
+            1,
+            format!(
+                "{reported}\nb/en-US.json:1:8  error  Expected a value, found the end of the file.  unreadable-catalogue\n\n2 problems (1 error, 1 warning)\n"
+            ),
+            String::new()
+        )
+    );
+}
+
+#[test]
+fn compares_with_a_source_locale_whose_files_hold_no_message() {
+    let mut host = Memory::new(&[
+        ("locales/en/common.json", "{}"),
+        ("locales/cs/common.json", r#"{"hi": "Ahoj"}"#),
+    ]);
+
+    assert_eq!(
+        host.run(&[PATTERN]),
+        (0, "locales/cs/common.json:1:8  warning  `en` has no message `common.hi`, so nothing this message renders is compared with it.  orphan-message\n\n1 problem (0 errors, 1 warning)\n".to_owned(), String::new())
+    );
+}
+
+#[test]
+fn takes_the_first_locale_found_in_the_order_of_the_paths_by_code_units() {
+    let mut host = Memory::new(&[
+        ("order/zh-Hant/a.json", r#"{"x": "X", "y": "Y"}"#),
+        ("order/zh_Hans/a.json", r#"{"x": "X"}"#),
+    ]);
+
+    assert_eq!(
+        host.run(&["order/{locale}/{namespace}.json"]).1,
+        "order/zh-Hant/a.json:1:17  warning  `zh-Hans` has no message `a.y`.  missing-message\n\n1 problem (0 errors, 1 warning)\n"
+    );
+
+    // U+1F600 comes before U+FB01 by code units, and after it by code point
+    // and by byte.
+    let mut host = Memory::new(&[
+        ("\u{fb01}/de.json", r#"{"x": "X"}"#),
+        ("\u{1f600}/cs.json", r#"{"y": "Y"}"#),
+    ]);
+
+    assert_eq!(
+        host.run(&["{namespace}/{locale}.json"]),
+        (
+            0,
+            "\u{1f600}/cs.json:1:7  warning  `de` has no message `\u{1f600}.y`.  missing-message\n\u{fb01}/de.json:1:7  warning  `cs` has no message `\u{fb01}.x`, so nothing this message renders is compared with it.  orphan-message\n\n2 problems (0 errors, 2 warnings)\n".to_owned(),
+            String::new()
+        )
+    );
 }
 
 #[test]
