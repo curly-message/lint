@@ -266,6 +266,20 @@ pub fn lint_entries(
     lint_entries_comparing(entries, options, Comparing::All, plurals)
 }
 
+/// Lints a list of messages as [`lint_entries`] does, but compares no
+/// locale with the source one, so `options.source` is not read: each
+/// message is linted with its locale, and each locale on its own, for an id
+/// it defines twice and a locale written two ways. What a host lints where
+/// it knows a catalogue only in part, since a comparison would report what
+/// lies past the part it read as missing.
+pub fn lint_entries_uncompared(
+    entries: &[Entry],
+    options: &EntriesOptions<'_>,
+    plurals: &dyn Plurals,
+) -> Vec<CatalogueFinding> {
+    lint_entries_comparing(entries, options, Comparing::None, plurals)
+}
+
 /// Lints a list of messages as `lint_entries` does, comparing with the
 /// source locale only the messages `comparing` takes. Each message is still
 /// linted with its locale, and each locale on its own.

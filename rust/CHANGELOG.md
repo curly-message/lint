@@ -8,6 +8,9 @@ Message Format in Rust, as a library and as the `curly-lint` command.
 * **Every rule of `@curly-message/lint`**, answering each case of the fixture
   set as it does: the rules a message decides on its own, those a locale
   decides, and those a catalogue decides.
+* **`lint_entries_uncompared`** lints a list of entries as `lint_entries`
+  does, but compares no locale with the source one, for a catalogue known
+  only in part.
 * **`read_catalogue`** reads a JSON catalogue and says where each string
   stands, past its escape sequences, up to 512 levels deep and up to
   the first string that is not well-formed Unicode text.
