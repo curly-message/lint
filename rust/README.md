@@ -23,10 +23,10 @@ codes.
 ## Install
 
 ```sh
-cargo install curly-message-lint
+cargo install curly-message-lint@1.0.0-next.0
 ```
 
-installs the command, and
+installs the command, a prerelease being installed only by its version, and
 
 ```sh
 cargo add curly-message-lint

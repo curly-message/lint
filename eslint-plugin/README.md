@@ -16,7 +16,7 @@ not here.
 ## Installation
 
 ```bash
-npm install --save-dev @curly-message/eslint-plugin @eslint/json
+npm install --save-dev @curly-message/eslint-plugin@next @eslint/json
 ```
 
 ESLint 9 or later. The rules are the library's, which holds them compiled to
