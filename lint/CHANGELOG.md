@@ -5,6 +5,14 @@
 The first version: a linter for messages and catalogues of the Curly Message
 Format, as a library and as the `curly-lint` command.
 
+* **The rules are the Rust crate's.** The package holds `curly-message-lint`
+  compiled to WebAssembly, the format's parser with it, so it answers what
+  the crate answers and installs nothing beside itself. It asks the
+  runtime's `Intl` for a locale's plural rules, and never for a locale tag
+  that is not well-formed. A call the core could not finish, as in a runtime
+  with no WebAssembly, past the 2 GiB the core may grow to, or where `Intl`
+  threw, throws a `CoreError`, and `curly-lint` exits 2.
+
 * **Rules a message decides on its own**: a `{{` that opens no placeholder, a
   modifier nobody registered, or one of Intl's where the host satisfies Core
   alone, a selection with no options, nesting past the limit, `default` spelled
@@ -42,15 +50,17 @@ Format, as a library and as the `curly-lint` command.
   read in a locale, no locale is compared with another in that run, and each
   message is still linted with its locale.
 * **The library** exports `lintMessage`, `lintCatalogue`, `lintEntries`,
-  `entriesOf`, `flatten`, `readCatalogue` and the `RULES` table. Findings
+  `entriesOf`, `flatten`, `readCatalogue`, `CoreError` and the `RULES`
+  table. Findings
   come in one order: by `entry` in a catalogue, then by `start`, then by
   `end`, then by their rule's place in `RULES`, then by `message`, comparing
   UTF-16 code units.
 * **Text that is not well-formed Unicode**, holding a surrogate that pairs
   with no other, is no message and no id. A catalogue is read up to the first
   such string, as up to where it stops being JSON, with an
-  `unreadable-catalogue` error: in a file, where that surrogate is written,
-  escaped or not; in a list of entries or a tree, on the first message whose
+  `unreadable-catalogue` error: in a file, where an escape sequence writes
+  that surrogate, one written as itself reading as U+FFFD, as a file read as
+  UTF-8 holds it; in a list of entries or a tree, on the first message whose
   locale, id or text is such text, and no message read before it is then
   compared with another locale's. `lintMessage` finds nothing in such a
   message. An unpaired surrogate in `source` or in a locale of `locales`, a

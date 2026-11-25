@@ -8,25 +8,16 @@ const ok = (read: Read) => {
   return read;
 };
 
-// What reading a catalogue file yields — its strings, where each stands, and
-// its findings — is pinned by the fixture set at the repository's root,
-// `fixtures/read/`. What stays here is the value read, an object of the host,
-// and a file no fixture holds.
+// What reading a catalogue file yields, its strings, where each stands, and
+// its findings, is pinned by the fixture set at the repository's root,
+// `fixtures/read/`. What stays here is a file no fixture holds.
 describe('readCatalogue', () => {
-  it('reads what JSON.parse reads', () => {
-    for (const text of ['{"a": "A", "b": {"c": [1, true, null, "C"]}, "d": -1.5e2}', '{"a": "first", "b": "kept", "a": {"x": "second"}}']) {
-      expect(ok(readCatalogue(text)).value).toEqual(JSON.parse(text));
-    }
-  });
-
   it('names each member a later one replaces by its whole path', () => {
     expect(ok(readCatalogue('{"a": {"b": {"c": "1", "c": "2"}}, "c": "3"}')).replaced).toEqual([{ path: ['a', 'b', 'c'], start: 13, end: 16 }]);
   });
 
   it('reads `__proto__` as a member', () => {
-    const read = ok(readCatalogue('{"__proto__": {"x": "y"}}'));
-
-    expect(Object.keys(read.value as object)).toEqual(['__proto__']);
+    expect(ok(readCatalogue('{"__proto__": {"x": "y"}}')).strings.map(({ path, value }) => ({ path, value }))).toEqual([{ path: ['__proto__', 'x'], value: 'y' }]);
   });
 
   it('refuses a catalogue nested deeper than any call stack goes, and never overflows', () => {
@@ -34,11 +25,26 @@ describe('readCatalogue', () => {
   });
 
   // A fixture states its text as JSON, which no reader of every language
-  // takes an unpaired surrogate in.
-  it('stops at an unpaired surrogate written as itself, and reads a pair written so', () => {
-    expect(readCatalogue('{"a": "b", "c": "x\udfff"}')).toEqual({ ok: false, message: 'Expected well-formed Unicode text, found the unpaired surrogate U+DFFF', offset: 18 });
-    expect(readCatalogue('{"\ud800": "b"}')).toEqual({ ok: false, message: 'Expected well-formed Unicode text, found the unpaired surrogate U+D800', offset: 2 });
-    expect(readCatalogue('{"a": "\ud800"}')).toEqual({ ok: false, message: 'Expected well-formed Unicode text, found the unpaired surrogate U+D800', offset: 7 });
-    expect(ok(readCatalogue('{"a": "\ud83d\ude00"}')).strings.map(({ value }) => value)).toEqual(['\ud83d\ude00']);
+  // takes an unpaired surrogate in. The text is read as UTF-8 holds it, as
+  // a file is.
+  it('reads an unpaired surrogate written as itself as U+FFFD, and a pair written so as it is', () => {
+    const strings = (text: string) => ok(readCatalogue(text)).strings.map(({ path, value, start, end }) => ({ path, value, start, end }));
+
+    expect(strings('{"a": "b", "c": "x\udfff"}')).toEqual([{ path: ['a'], value: 'b', start: 6, end: 9 }, { path: ['c'], value: 'x\ufffd', start: 16, end: 20 }]);
+    expect(strings('{"\ud800": "b"}')).toEqual([{ path: ['\ufffd'], value: 'b', start: 6, end: 9 }]);
+    expect(strings('{"a": "\ud83d\ude00"}')).toEqual([{ path: ['a'], value: '\ud83d\ude00', start: 6, end: 10 }]);
+  });
+
+  it('throws a `TypeError` where it is handed no string, and reads a `String` object as its text', () => {
+    for (const text of [5, null, undefined, {}, ['{}'], true]) expect(() => readCatalogue(text as never)).toThrow(TypeError);
+
+    expect(ok(readCatalogue(new String('{"a": "b"}') as never)).strings.map(({ path, value }) => ({ path, value }))).toEqual([{ path: ['a'], value: 'b' }]);
+  });
+
+  it('answers where a code unit of a character two escape sequences spell is written', () => {
+    const [{ value, offsetOf }] = ok(readCatalogue('{"a": "\\ud83d\\ude00{{"}')).strings;
+
+    expect(value).toBe('\ud83d\ude00{{');
+    expect([0, 1, 2, 3, 4].map(offsetOf)).toEqual([7, 13, 19, 20, 21]);
   });
 });

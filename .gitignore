@@ -2,6 +2,9 @@ node_modules/
 dist/
 build/
 
+# The core built for WebAssembly, which `lint/`'s build inlines.
+lint/core.wasm
+
 .env
 .vscode/
 .idea/

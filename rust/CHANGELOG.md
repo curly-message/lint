@@ -25,6 +25,6 @@ Message Format in Rust, as a library and as the `curly-lint` command.
   a `Table` of rules stated as data, or a host's own. They are asked only
   for a locale tag that is well-formed, as `Intl` takes one, so a host's
   `Intl` is never handed one it would refuse.
-* **Offsets count bytes** of the message or the file, where the TypeScript
+* **Offsets count bytes** of the message or the file, where the npm
   package counts UTF-16 code units; the command's columns count UTF-16 code
   units, as an editor does.
