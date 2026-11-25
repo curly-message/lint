@@ -1,4 +1,4 @@
-import { byPlace, finding, quoted } from './message';
+import { failure, fromHost, readText } from './core';
 import type { Finding } from './types';
 
 /** A string a catalogue file holds, where it stands in the file. */
@@ -21,27 +21,8 @@ export type Located = {
 export type Replaced = { path: string[], start: number, end: number };
 
 export type Read =
-  | { ok: true, value: unknown, strings: Located[], replaced: Replaced[] }
+  | { ok: true, strings: Located[], replaced: Replaced[] }
   | { ok: false, message: string, offset: number };
-
-// How deep a catalogue's objects and arrays may nest: the reader descends by
-// calls, which a call stack holds only so many of.
-const MAX_DEPTH = 512;
-
-const ESCAPES: Record<string, string> = { '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' };
-
-const codePoint = (char: string) => `U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')}`;
-
-// A character as a report shows it: by its code point where it is invisible,
-// or would break the line the report is on.
-export const shown = (char: string) => (/[\p{C}\p{Z}]/u.test(char) ? codePoint(char) : `\`${char}\``);
-
-// A text as one line of a report holds it: each line terminator of the
-// format's `line-term`, each control character and each bidirectional control
-// written by its code point, so that no text a catalogue or a path holds ends
-// the line, drives the terminal it is shown in, or reorders the rest of the
-// line. The three sets are fixed, whatever the version of Unicode.
-export const oneLine = (text: string) => text.replace(/[\u2028\u2029\p{Cc}\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/gu, codePoint);
 
 // Where the code unit at `index` of a string's value is written: past the
 // opening quote, and past the units each escape sequence before it is
@@ -62,262 +43,62 @@ const locator = (start: number, length: number, escapes: number[], extra: number
   return start + 1 + unit + (low ? extra[low - 1] : 0);
 };
 
-// The strings no dropped range covers.
-const kept = (strings: Located[], dropped: [number, number][]) => {
-  const covered = new Int32Array(strings.length + 1);
+const HIGH = /[\ud800-\udbff]/;
 
-  for (const [from, to] of dropped) {
-    covered[from] += 1;
-    covered[to] -= 1;
+// The core counts a character an escape sequence spells, and a file spells
+// one outside the Basic Multilingual Plane with two sequences, a code unit
+// each.
+const located = (value: string, start: number, spelled: [number, number][]) => {
+  const escapes: number[] = [];
+  const extra: number[] = [];
+  let sum = 0;
+
+  for (const [unit, written] of spelled) {
+    const units = HIGH.test(value.charAt(unit)) ? 2 : 1;
+
+    for (let part = 0; part < units; part += 1) {
+      sum += written / units - 1;
+      escapes.push(unit + part);
+      extra.push(sum);
+    }
   }
 
-  let depth = 0;
-
-  return strings.filter((_, index) => {
-    depth += covered[index];
-
-    return !depth;
-  });
+  return locator(start, value.length, escapes, extra);
 };
 
-class Unreadable extends Error {
-  constructor(message: string, readonly offset: number) {
-    super(message);
-  }
-}
+const findings = new WeakMap<Read, Finding[]>();
 
 /**
  * Reads a JSON catalogue the way `JSON.parse` does — a later member of the
  * same name replaces an earlier one — past a byte order mark, and says where
  * each string stands, so a finding in a message can be pointed at in the
- * file. A catalogue nested deeper than 512 levels is not read.
+ * file. A catalogue nested deeper than 512 levels is not read. The text is
+ * read as UTF-8 holds it, so a surrogate written as itself that pairs with
+ * no other reads as U+FFFD.
  */
 export const readCatalogue = (text: string): Read => {
-  const strings: Located[] = [];
-  // The ranges of `strings` a later member of the same name replaced.
-  const dropped: [number, number][] = [];
-  const replaced: Replaced[] = [];
-  let at = 0;
-
-  const fail = (what: string): never => {
-    throw new Unreadable(at < text.length ? `${what}, found ${shown(String.fromCodePoint(text.codePointAt(at)!))}` : `${what}, found the end of the file`, at);
-  };
-
-  const space = () => {
-    while (at < text.length && ' \t\n\r'.includes(text[at])) at += 1;
-  };
-
-  const string = () => {
-    const start = at;
-    const escapes: number[] = [];
-    const extra: number[] = [];
-    let value = '';
-    // The high surrogate the value ends with, and where it is written, while
-    // nothing has paired it yet.
-    let pending: [string, number] | undefined;
-
-    const unpaired = ([unit, offset]: [string, number]): never => {
-      throw new Unreadable(`Expected well-formed Unicode text, found the unpaired surrogate ${shown(unit)}`, offset);
-    };
-
-    // The text stops being readable at whichever comes first: a surrogate
-    // still unpaired, or the fault found past it.
-    const stop = (what: string): never => (pending ? unpaired(pending) : fail(what));
-
-    const take = (unit: string, offset: number) => {
-      const low = unit >= '\udc00' && unit <= '\udfff';
-
-      if (pending && !low) unpaired(pending);
-      if (!pending && low) unpaired([unit, offset]);
-      pending = unit >= '\ud800' && unit <= '\udbff' ? [unit, offset] : undefined;
-      value += unit;
-    };
-
-    if (text[at] !== '"') fail('Expected a string');
-    at += 1;
-
-    while (text[at] !== '"') {
-      if (at >= text.length) stop('Expected the string to close');
-
-      const char = text[at];
-
-      if (char < ' ') stop('Expected a control character to be escaped');
-
-      if (char !== '\\') {
-        take(char, at);
-        at += 1;
-        continue;
-      }
-
-      const kind = text[at + 1];
-      let width = 2;
-
-      if (kind === 'u') {
-        const hex = text.slice(at + 2, at + 6);
-
-        if (!/^[0-9a-fA-F]{4}$/.test(hex)) stop('Expected four hexadecimal digits');
-        take(String.fromCharCode(parseInt(hex, 16)), at);
-        width = 6;
-      } else if (kind !== undefined && kind in ESCAPES) {
-        take(ESCAPES[kind], at);
-      } else {
-        at += 1;
-        stop('Expected an escape sequence');
-      }
-
-      escapes.push(value.length - 1);
-      extra.push((extra.at(-1) ?? 0) + width - 1);
-      at += width;
-    }
-
-    if (pending) unpaired(pending);
-    at += 1;
-
-    return { value, start, end: at, offsetOf: locator(start, value.length, escapes, extra) };
-  };
-
-  const value = (path: string[]): unknown => {
-    space();
-
-    const char = text[at];
-
-    if ((char === '{' || char === '[') && path.length >= MAX_DEPTH) throw new Unreadable(`The catalogue nests deeper than ${MAX_DEPTH} levels`, at);
-    if (char === '{') return object(path);
-    if (char === '[') return array(path);
-
-    if (char === '"') {
-      const { value: read, start, end, offsetOf } = string();
-
-      strings.push({ path, value: read, start, end, offsetOf });
-
-      return read;
-    }
-
-    for (const [word, meant] of [['true', true], ['false', false], ['null', null]] as const) {
-      if (text.startsWith(word, at)) {
-        at += word.length;
-
-        return meant;
-      }
-    }
-
-    const number = /-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?/y;
-
-    number.lastIndex = at;
-
-    const found = number.exec(text);
-
-    if (!found) fail('Expected a value');
-    at += found![0].length;
-
-    return Number(found![0]);
-  };
-
-  const object = (path: string[]) => {
-    // A null prototype takes `__proto__` as a member like any other, as
-    // `JSON.parse` does.
-    const out = Object.create(null) as Record<string, unknown>;
-    const keys = new Map<string, { start: number, end: number, from: number, to: number }>();
-
-    at += 1;
-    space();
-
-    if (text[at] === '}') {
-      at += 1;
-
-      return out;
-    }
-
-    for (;;) {
-      space();
-
-      const key = string();
-
-      space();
-      if (text[at] !== ':') fail('Expected a colon');
-      at += 1;
-
-      const earlier = keys.get(key.value);
-
-      if (earlier) {
-        replaced.push({ path: [...path, key.value], start: earlier.start, end: earlier.end });
-        // What the earlier member held is no longer in the catalogue.
-        dropped.push([earlier.from, earlier.to]);
-      }
-
-      const from = strings.length;
-
-      out[key.value] = value([...path, key.value]);
-      keys.set(key.value, { start: key.start, end: key.end, from, to: strings.length });
-      space();
-
-      if (text[at] === ',') {
-        at += 1;
-        continue;
-      }
-
-      if (text[at] === '}') {
-        at += 1;
-
-        return out;
-      }
-
-      fail('Expected a comma or a closing brace');
-    }
-  };
-
-  const array = (path: string[]) => {
-    const out: unknown[] = [];
-
-    at += 1;
-    space();
-
-    if (text[at] === ']') {
-      at += 1;
-
-      return out;
-    }
-
-    for (;;) {
-      out.push(value([...path, `${out.length}`]));
-      space();
-
-      if (text[at] === ',') {
-        at += 1;
-        continue;
-      }
-
-      if (text[at] === ']') {
-        at += 1;
-
-        return out;
-      }
-
-      fail('Expected a comma or a closing bracket');
-    }
-  };
-
   try {
-    // A byte order mark is no part of the document.
-    if (text.charCodeAt(0) === 0xfeff) at = 1;
+    const given = fromHost(() => {
+      if (typeof text !== 'string' && !((text as unknown) instanceof String)) throw new TypeError(`readCatalogue reads a string, not ${text === null ? 'null' : typeof text}`);
 
-    const read = value([]);
+      return String(text);
+    });
+    const { findings: found, read: answered } = readText(given);
+    const read: Read = answered.ok
+      ? { ok: true, strings: answered.strings.map(({ escapes, ...string }) => ({ ...string, offsetOf: located(string.value, string.start, escapes) })), replaced: answered.replaced }
+      : answered;
 
-    space();
-    if (at < text.length) fail('Expected the end of the file');
+    findings.set(read, found);
 
-    return { ok: true, value: read, strings: kept(strings, dropped), replaced };
+    return read;
   } catch (error) {
-    if (error instanceof Unreadable) return { ok: false, message: error.message, offset: error.offset };
-    throw error;
+    throw failure(error);
   }
 };
 
 /**
- * The findings reading a catalogue file yields, located by UTF-16 code units
- * of its text: where the file stops being readable, or each member a later
- * one of the same name replaces.
+ * The findings reading a catalogue file yielded, located by UTF-16 code
+ * units of its text: where the file stops being readable, or each member a
+ * later one of the same name replaces.
  */
-export const readFindings = (read: Read): Finding[] => (read.ok
-  ? read.replaced.map(({ path, start, end }) => finding('duplicate-id', undefined, `${quoted(path.at(-1) as string)} is defined again later in this object, so this value is never read.`, start, end)).sort(byPlace)
-  : [finding('unreadable-catalogue', undefined, `${read.message}.`, read.offset, read.offset)]);
+export const readFindings = (read: Read): Finding[] => findings.get(read) ?? [];

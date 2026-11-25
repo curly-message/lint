@@ -9,7 +9,9 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": false,
-    "types": []
+    // The source the declarations are held to reads the core's bytes and
+    // the runtime's globals.
+    "types": ["node"]
   },
-  "files": ["./surface.ts"]
+  "files": ["./surface.ts", "../../src/wasm.d.ts"]
 }

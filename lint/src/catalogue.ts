@@ -1,14 +1,9 @@
-import { byPlace, definedBy, finding, FORMATTING, lintTree, quoted, readingOf, resolvable, unpaired } from './message';
-import { intlPlurals, numberOf } from './plural';
+import { failure, fromHost, lintEntriesIn, opened, unpaired } from './core';
+import type { Entry, Opened } from './core';
+import { intlPlurals } from './plural';
 import type { Plurals } from './plural';
-import { shown } from './read';
-import { localeKey } from './tag';
-import { read } from './tree';
-import type { Placeholder, Tree } from './tree';
-import type { Catalogue, CatalogueFinding, CatalogueOptions, Code, EntriesOptions, Finding } from './types';
-
-/** A message, the id a catalogue gives it and the locale it is written for. */
-export type Entry = { locale: string, id: string, message: string };
+import { RANK, SEVERITY } from './rules';
+import type { Catalogue, CatalogueFinding, CatalogueOptions, EntriesOptions } from './types';
 
 // An object's own enumerable members that hold a value. An accessor is never
 // read, as reading one calls a function the catalogue holds, and an object
@@ -91,209 +86,72 @@ export const flatten = (tree: unknown): { id: string, message: string }[] => wal
 export const entriesOf = (catalogue: Catalogue): Entry[] => own(catalogue)
   .flatMap(([locale, tree]) => flatten(tree).map(({ id, message }) => ({ locale, id, message })));
 
-const PLURALS = ['plural', 'ordinal'];
-
-/** How the rules read a placeholder's modifier: the modifiers the host has, and those it registers. */
-type Modifiers = { defined: readonly string[], hosted: readonly string[] };
-
-// The format's own selection a placeholder makes, as the rules of a message
-// read it: a formatting modifier selects nothing.
-const selectionOf = (placeholder: Placeholder, { defined, hosted }: Modifiers) => {
-  const reading = readingOf(placeholder, defined, hosted);
-
-  return reading?.own && !FORMATTING.includes(reading.name) ? reading.name : undefined;
-};
-
-// How a placeholder shows its value: with the formatting modifier or the
-// host's modifier it names, or as it is. A selection shows nothing of it.
-const shownWith = (placeholder: Placeholder, modifiers: Modifiers) => (selectionOf(placeholder, modifiers) ? undefined : placeholder.modifier?.name ?? '');
-
-/** The placeholders resolution reaches that name a key, by the key. */
-type Names = Map<string, Placeholder[]>;
-
-const namesOf = (tree: Tree): Names => {
-  const names: Names = new Map();
-
-  for (const placeholder of resolvable(tree)) {
-    if (!placeholder.key) continue;
-
-    const named = names.get(placeholder.key.name);
-
-    if (named) named.push(placeholder);
-    else names.set(placeholder.key.name, [placeholder]);
-  }
-
-  return names;
-};
-
-/** A message a locale is compared by, and its names, read where it is compared. */
-type Read = { entry: number, names?: Names };
-
-// The numbers the options of selections give text of their own. A number key
-// of `plural` selects for the number it reads as (section 11.5), and a key of
-// `eq` only for the number whose text it spells (section 11.1).
-const numbersOf = (placeholders: Placeholder[], spelled: boolean) => placeholders.flatMap(({ segments }) => segments.flatMap(({ name }) => {
-  const number = name === 'default' ? undefined : numberOf(name);
-
-  return number === undefined || (spelled && String(number) !== name.toLowerCase()) ? [] : [number];
-}));
+const FIELDS = ['locale', 'id', 'message'] as const;
 
 /**
- * Lints a list of messages as `lintEntries` does, comparing with the source
- * locale only the messages whose ids `comparing` takes, and none where it is
- * `false`. Each message is still linted with its locale, and each locale on
- * its own.
+ * A list of entries as the core is handed it, each entry read once: three
+ * texts an entry, a locale or an id that is no string written as `String`
+ * writes it; the locale and the id of each as the list holds them, which a
+ * finding names; and the first entry whose locale, id or message is not
+ * well-formed Unicode text, with which of the three and the surrogate in it
+ * that pairs with no other. No entry past that one is read.
  */
-export const lintEntriesComparing = (entries: readonly Entry[], options: EntriesOptions, comparing: ((id: string) => boolean) | false, plurals: Plurals): CatalogueFinding[] => {
-  const hosted = options.modifiers ?? [];
-  const modifiers = { defined: definedBy(options.intl), hosted };
-  const findings: CatalogueFinding[] = [];
-  const add = (entry: number, found: Finding) => findings.push({ ...found, locale: entries[entry].locale, id: entries[entry].id, entry });
-  const make = (entry: number, code: Code, section: string | undefined, message: string, start = 0, end = 0) => add(entry, finding(code, section, message, start, end));
+type Listed = { texts: string[], named: unknown[], fault?: { index: number, field: typeof FIELDS[number], unit: string, locale: unknown, id: unknown } };
 
-  // Each locale by its key, named as its first message writes it, or as
-  // `options.locales` does, with the first message under each id, the one
-  // the locale is compared by.
-  type Locale = { name: string, written?: string, messages: Map<string, Read> };
-  // Once a locale has two spellings, each keeps the ids it defines; until
-  // then, those of the locale's messages are the first spelling's.
-  type Spelling = { locale: Locale, ids?: Set<string> };
-  const locales = new Map<string, Locale>();
-  const spelled = new Map<string, Spelling>();
-  const spellingOf = (written: string) => {
-    let found = spelled.get(written);
+const listOf = (entries: Iterable<Entry>): Listed => {
+  const texts: string[] = [];
+  const named: unknown[] = [];
+  let index = 0;
 
-    if (!found) {
-      const key = localeKey(written);
-      const locale = locales.get(key) ?? { name: written, messages: new Map<string, Read>() };
+  for (const { locale, id, message } of entries) {
+    const fields = { locale, id, message };
 
-      locales.set(key, locale);
-      found = { locale };
-      spelled.set(written, found);
+    for (const field of FIELDS) {
+      const unit = unpaired(fields[field]);
+
+      if (unit) return { texts, named, fault: { index, field, unit, locale, id } };
     }
 
-    return found;
-  };
-
-  for (const locale of options.locales ?? []) spellingOf(locale);
-
-  entries.forEach(({ locale: written, id, message }, entry) => {
-    const tree = read(message);
-
-    for (const found of lintTree(message, tree, { modifiers: hosted, intl: options.intl, locale: written }, plurals)) add(entry, found);
-
-    const spelling = spellingOf(written);
-    const { locale } = spelling;
-
-    if (locale.written === undefined) {
-      locale.written = written;
-      locale.name = written;
-    } else if (locale.written !== written && !spelling.ids) {
-      spelling.ids = new Set();
-      spellingOf(locale.written).ids ??= new Set(locale.messages.keys());
-      make(entry, 'duplicate-locale', undefined, `${quoted(written)} is ${quoted(locale.written)} written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.`);
-    }
-
-    const first = locale.messages.get(id);
-
-    if (spelling.ids ? spelling.ids.has(id) : first) {
-      make(entry, 'duplicate-id', undefined, `${quoted(id)} is defined again in ${quoted(written)}, so one of the two messages is never read.`);
-    } else if (first && entries[first.entry].message !== message) {
-      make(entry, 'duplicate-id', undefined, `${quoted(id)} is also defined in ${quoted(entries[first.entry].locale)}, the same locale written another way, so a host that reads the two as one never reads one of the two messages.`);
-    }
-
-    spelling.ids?.add(id);
-    if (!first) locale.messages.set(id, { entry, names: comparing && comparing(id) ? namesOf(tree) : undefined });
-  });
-
-  // A spelling `options.locales` gives a locale whose messages are written
-  // otherwise, reported on the locale's first message.
-  for (const written of new Set(options.locales ?? [])) {
-    const { locale, ids } = spelled.get(written) as Spelling;
-    const [opening] = locale.messages.values();
-
-    if (opening && locale.written !== written && !ids) make(opening.entry, 'duplicate-locale', undefined, `${quoted(written)}, under which no message was read, is ${quoted(locale.written as string)} written another way, so a host that looks a locale up as written reads only the messages under the one it is asked for.`);
+    named.push(locale, id);
+    texts.push(String(locale), String(id), typeof message === 'string' ? message : '');
+    index += 1;
   }
 
-  if (!comparing) return findings.sort(order);
-
-  const named = typeof options.source === 'string' ? options.source : undefined;
-  const reference = named === undefined ? locales.get('en') ?? [...locales.values()][0] : locales.get(localeKey(named));
-
-  if (!reference) {
-    for (const { name, messages } of locales.values()) {
-      const [opening] = messages.values();
-
-      if (opening?.names) make(opening.entry, 'missing-source', undefined, `The source locale ${quoted(named as string)} is no locale of the catalogue, so nothing ${quoted(name)} holds is compared with it.`);
-    }
-
-    return findings.sort(order);
-  }
-
-  for (const other of locales.values()) {
-    if (other === reference) continue;
-
-    const { name, messages } = other;
-
-    for (const [id, { entry, names }] of reference.messages) {
-      if (names && !messages.has(id)) make(entry, 'missing-message', undefined, `${quoted(name)} has no message ${quoted(id)}.`);
-    }
-
-    for (const [id, { entry, names }] of messages) {
-      if (!names) continue;
-
-      const compared = reference.messages.get(id);
-
-      if (!compared) {
-        make(entry, 'orphan-message', undefined, `${quoted(reference.name)} has no message ${quoted(id)}, so nothing this message renders is compared with it.`);
-        continue;
-      }
-
-      if (compared.names) compare(entries[compared.entry].locale, compared.names, entry, names, modifiers, make);
-    }
-  }
-
-  return findings.sort(order);
+  return { texts, named };
 };
 
-// The first entry whose locale, id or message is not well-formed Unicode
-// text, which of the three, and the surrogate in it that pairs with no other.
-const illFormed = (entries: readonly Entry[]) => {
-  for (const [index, entry] of entries.entries()) {
-    for (const field of ['locale', 'id', 'message'] as const) {
-      const unit = unpaired(entry[field]);
+// A finding about a catalogue the core is never handed: text that is not
+// well-formed Unicode, which it cannot hold, and the messages past a million,
+// which are not read to hand it.
+const unreadable = (locale: unknown, id: unknown, entry: number, message: string): CatalogueFinding => ({ code: 'unreadable-catalogue', severity: SEVERITY['unreadable-catalogue'], message, start: 0, end: 0, locale: locale as string, id: id as string, entry });
 
-      if (unit) return { index, field, unit };
-    }
-  }
-
-  return undefined;
-};
-
-// What `String.prototype.toWellFormed` does, which the declarations of the
-// lib level a consumer compiles against lack.
-const wellFormed = <T>(text: T) => (typeof text === 'string' ? text.replace(/\p{Cs}/gu, '\ufffd') : text);
-
-// Lints the entries up to `fault`, where there is one. What the catalogue
-// holds past it, or past the last of `entries` where the catalogue was `cut`
+// Lints the entries up to the fault, where there is one. What the catalogue
+// holds past it, or past the last entry where the catalogue was `cut`
 // there, is unknown, so no message is then compared with another locale's,
 // as `curly-lint` compares nothing a file that is not JSON holds.
-const lintUpTo = (entries: readonly Entry[], given: EntriesOptions, plurals: Plurals, fault: ReturnType<typeof illFormed>, cut = false): CatalogueFinding[] => {
-  // A caller's options are no catalogue text: each unpaired surrogate in one
-  // reads as U+FFFD, as a command's arguments converted lossily do.
-  const options = { ...given, source: wellFormed(given.source), locales: Array.isArray(given.locales) ? given.locales.map(wellFormed) : given.locales };
+const lintUpTo = ({ texts, named, fault }: Listed, given: Opened, plurals: Plurals, cut = false): CatalogueFinding[] => {
+  const findings = lintEntriesIn(plurals, texts, named, given, cut || fault !== undefined);
 
-  if (!fault) return lintEntriesComparing(entries, options, !cut && (() => true), plurals);
+  if (!fault) return findings;
 
-  const { index, field, unit } = fault;
-  const { locale, id } = entries[index];
-  const message = `This entry's ${field} is not well-formed Unicode text: it holds the unpaired surrogate ${shown(unit)}, so the catalogue is read no further.`;
+  const { index, field, unit, locale, id } = fault;
+  const shown = `U+${unit.charCodeAt(0).toString(16).toUpperCase()}`;
 
-  return [...lintEntriesComparing(entries.slice(0, index), options, false, plurals), { ...finding('unreadable-catalogue', undefined, message, 0, 0), locale, id, entry: index }];
+  return [...findings, unreadable(locale, id, index, `This entry's ${field} is not well-formed Unicode text: it holds the unpaired surrogate ${shown}, so the catalogue is read no further.`)];
 };
 
 /** Lints a list of messages as `lintEntries` does, with the plural rules `plurals` has. */
-export const lintEntriesWith = (plurals: Plurals) => (entries: readonly Entry[], options: EntriesOptions = {}): CatalogueFinding[] => lintUpTo(entries, options, plurals, illFormed(entries));
+export const lintEntriesWith = (plurals: Plurals) => (entries: readonly Entry[], options: EntriesOptions = {}): CatalogueFinding[] => {
+  try {
+    // What the list and its options hold is read before the core is asked,
+    // so that host code it runs never runs while the core holds the list.
+    const [listed, given] = fromHost(() => [listOf(entries), opened(options, options.source, options.locales)] as const);
+
+    return lintUpTo(listed, given, plurals);
+  } catch (error) {
+    throw failure(error);
+  }
+};
 
 /**
  * Lints a list of messages as one catalogue: each message, each with its
@@ -305,53 +163,9 @@ export const lintEntriesWith = (plurals: Plurals) => (entries: readonly Entry[],
  */
 export const lintEntries = lintEntriesWith(intlPlurals);
 
-const order = (a: CatalogueFinding, b: CatalogueFinding) => a.entry - b.entry || byPlace(a, b);
-
-const compare = (source: string, reference: Names, entry: number, names: Names, modifiers: Modifiers, make: (entry: number, code: Code, section: string | undefined, message: string, start?: number, end?: number) => void) => {
-  for (const name of reference.keys()) {
-    if (!names.has(name)) make(entry, 'parameter-mismatch', '9.2', `This message never reads ${quoted(name)}, which the ${quoted(source)} message reads.`);
-  }
-
-  const selecting = (placeholders: Placeholder[], selections: readonly string[]) => placeholders
-    .filter((placeholder) => selections.includes(selectionOf(placeholder, modifiers) ?? ''));
-  const showing = (placeholders: Placeholder[]) => new Set(placeholders.flatMap((placeholder) => shownWith(placeholder, modifiers) ?? []));
-
-  for (const [name, placeholders] of names) {
-    const [first] = placeholders;
-    const compared = reference.get(name);
-
-    if (!compared) {
-      make(entry, 'parameter-mismatch', '9.2', `${quoted(name)} is read here and never in the ${quoted(source)} message, so a payload written for that message does not carry it.`, first.node.start, first.node.end);
-      continue;
-    }
-
-    const shown = showing(placeholders);
-    const reshown = showing(compared);
-    const differs = [...shown].some((how) => !reshown.has(how)) || [...reshown].some((how) => !shown.has(how));
-
-    // A message that only selects by a parameter shows it no other way.
-    if (shown.size && reshown.size && differs) {
-      const spell = (hows: Set<string>) => [...hows].map((how) => (how ? `with ${quoted(how)}` : 'as it is')).join(' and ');
-
-      make(entry, 'modifier-mismatch', '11', `${quoted(name)} is shown ${spell(shown)} here and ${spell(reshown)} in the ${quoted(source)} message.`, first.node.start, first.node.end);
-    }
-
-    const selections = selecting(placeholders, PLURALS);
-
-    if (!selections.length) continue;
-
-    // Text of its own for a number, given by the plural selection or by one
-    // that compares the value with the number's key.
-    const keyed = new Set([...numbersOf(selections, false), ...numbersOf(selecting(placeholders, ['eq']), true)]);
-    const at = selections[0].modifier ?? selections[0].node;
-
-    for (const number of new Set(numbersOf(selecting(compared, PLURALS), false))) {
-      if (keyed.has(number)) continue;
-
-      make(entry, 'missing-number-key', '11.5', `The ${quoted(source)} message gives ${quoted(String(number))} text of its own, and this selection has no ${quoted(String(number))} option, so it takes its category's.`, at.start, at.end);
-    }
-  }
-};
+// The order the core lists findings in: by entry, by place, by rule, then by
+// the text's code units.
+const order = (a: CatalogueFinding, b: CatalogueFinding) => a.entry - b.entry || a.start - b.start || a.end - b.end || RANK[a.code] - RANK[b.code] || (a.message < b.message ? -1 : a.message > b.message ? 1 : 0);
 
 /**
  * Lints a catalogue: a tree of messages for each locale. A tree is read up to
@@ -361,29 +175,36 @@ const compare = (source: string, reference: Names, entry: number, names: Names, 
  * than text before it that is not well-formed Unicode.
  */
 export const lintCatalogue = (catalogue: Catalogue, options: CatalogueOptions = {}): CatalogueFinding[] => {
-  const locales = own(catalogue);
-  const entries: Entry[] = [];
-  // The last message read of each locale whose tree holds more.
-  const cut: number[] = [];
+  try {
+    const locales = own(catalogue);
+    const entries: Entry[] = [];
+    // The last message read of each locale whose tree holds more.
+    const cut: number[] = [];
 
-  for (const [locale, tree] of locales) {
-    const walked = walk(tree);
+    for (const [locale, tree] of locales) {
+      const walked = walk(tree);
 
-    for (const { id, message } of walked.messages) entries.push({ locale, id, message });
-    if (walked.cut) cut.push(entries.length - 1);
+      for (const { id, message } of walked.messages) entries.push({ locale, id, message });
+      if (walked.cut) cut.push(entries.length - 1);
+    }
+
+    const given = fromHost(() => opened(options, options.source, locales.map(([locale]) => locale)));
+    const listed = listOf(entries);
+    const findings = lintUpTo(listed, given, intlPlurals, cut.length > 0);
+    // No message past one that is not well-formed text is read.
+    const read = listed.fault?.index ?? entries.length;
+
+    // Each joins the core's findings, which come in order, at its own place.
+    for (const entry of cut.filter((last) => last < read)) {
+      const { locale, id } = entries[entry];
+      const added = unreadable(locale, id, entry, `\`${locale}\` holds more than ${MAX_MESSAGES} messages, an object it holds in several places counted in each, so it is read no further than this one.`);
+      const after = findings.findIndex((found) => order(added, found) < 0);
+
+      findings.splice(after < 0 ? findings.length : after, 0, added);
+    }
+
+    return findings;
+  } catch (error) {
+    throw failure(error);
   }
-
-  const fault = illFormed(entries);
-  const findings = lintUpTo(entries, { ...options, locales: locales.map(([locale]) => locale) }, intlPlurals, fault, cut.length > 0);
-  // No message past one that is not well-formed text is read.
-  const read = fault?.index ?? entries.length;
-
-  for (const entry of cut.filter((last) => last < read)) {
-    const { locale, id } = entries[entry];
-    const message = `${quoted(locale)} holds more than ${MAX_MESSAGES} messages, an object it holds in several places counted in each, so it is read no further than this one.`;
-
-    findings.push({ ...finding('unreadable-catalogue', undefined, message, 0, 0), locale, id, entry });
-  }
-
-  return findings.sort(order);
 };

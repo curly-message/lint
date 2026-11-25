@@ -1,6 +1,6 @@
-export { lintMessage } from './message';
+export { CoreError, lintMessage } from './core';
 export { entriesOf, flatten, lintCatalogue, lintEntries } from './catalogue';
-export type { Entry } from './catalogue';
+export type { Entry } from './core';
 export { readCatalogue } from './read';
 export { RULES } from './rules';
 export type { Rule, Scope } from './rules';

@@ -16,11 +16,14 @@ not here.
 ## Installation
 
 ```bash
-npm install --save-dev @curly-message/eslint-plugin @curly-message/parser @eslint/json
+npm install --save-dev @curly-message/eslint-plugin @eslint/json
 ```
 
-ESLint 9 or later. The Curly Message parser is a peer dependency, as it is of
-the library: a message is read with the parser the project resolves it with.
+ESLint 9 or later. The rules are the library's, which holds them compiled to
+WebAssembly, the format's parser with them, so the plugin needs no parser
+beside it. A rule throws the library's `CoreError` where its core could not
+finish, as in a runtime with no WebAssembly, which ends ESLint's run as any
+rule that throws does.
 JSON is linted through ESLint's own [`@eslint/json`](https://github.com/eslint/json),
 and TypeScript through a parser ESLint does not ship, such as
 [`typescript-eslint`](https://typescript-eslint.io)'s.

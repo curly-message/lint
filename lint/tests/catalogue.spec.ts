@@ -83,6 +83,16 @@ describe('a catalogue', () => {
     expect(codes(lintEntries([{ id: 'hi', message: 'Hi {{x}}' } as never, { locale: 'cs', id: 'hi', message: 'A' }]))).toEqual(['parameter-mismatch cs hi']);
   });
 
+  it('names a locale and an id that are no string as `String` writes them', () => {
+    const messages = (entries: unknown[], options = {}) => lintEntries(entries as never, options).map(({ message }) => message);
+
+    expect(messages([{ locale: 5, id: 'a', message: 'x' }], { source: 'en' })).toEqual(['The source locale `en` is no locale of the catalogue, so nothing `5` holds is compared with it.']);
+    expect(messages([{ locale: null, id: 6, message: 'x' }, { locale: 'en', id: 'b', message: 'x' }], { source: 'en' })).toEqual([
+      '`en` has no message `6`, so nothing this message renders is compared with it.',
+      '`null` has no message `b`.',
+    ]);
+  });
+
   it('compares a message nested deeper than any call stack goes by the levels resolution reaches', () => {
     const deep = `${'{{v; a:'.repeat(100_000)}x${'}}'.repeat(100_000)}`;
 
