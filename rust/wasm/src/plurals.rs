@@ -4,7 +4,7 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-use curly_message_lint::{Category, Plurals, RuleType, Rules};
+use curly_message_lint::{Category, KeptCategories, Plurals, RuleType, Rules};
 
 use crate::abi;
 
@@ -31,6 +31,13 @@ pub struct Hosted;
 // No borrow is held across a call of the host, which may call the module
 // again from inside it.
 impl Plurals for Hosted {
+    // An instance is handed one host's rules for as long as it lives.
+    fn kept(&self) -> Option<&KeptCategories> {
+        static KEPT: KeptCategories = KeptCategories::new();
+
+        Some(&KEPT)
+    }
+
     fn rules(&self, tag: &str, kind: RuleType) -> Option<Box<dyn Rules + '_>> {
         let ordinal = kind == RuleType::Ordinal;
         let key = (tag.to_owned(), ordinal);
