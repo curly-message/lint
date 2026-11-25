@@ -101,6 +101,20 @@
         }
       ],
       "findings": []
+    },
+    {
+      "name": "characters outside ASCII written as themselves between escape sequences",
+      "text": "{\"a\": \"\\u00e9\u00e9\ud83d\ude00\\/\ud83d\ude00\\ud83d\\ude00\u00e9\"}",
+      "strings": [
+        {
+          "path": ["a"],
+          "value": "\u00e9\u00e9\ud83d\ude00/\ud83d\ude00\ud83d\ude00\u00e9",
+          "start": 6,
+          "end": 34,
+          "offsets": [7, 13, 14, 15, 16, 18, 19, 20, 26, 32, 33]
+        }
+      ],
+      "findings": []
     }
   ]
 }

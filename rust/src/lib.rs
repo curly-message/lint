@@ -25,7 +25,7 @@ pub use cldr::Cldr;
 pub use finding::{CatalogueFinding, Finding};
 pub use message::{Options, lint_message};
 pub use plural::{Category, NoPlurals, Plurals, RuleType, Rules, Table, probes};
-pub use read::{Catalogue, Located, Replaced, Unreadable, read_catalogue, read_findings};
+pub use read::{Catalogue, Escape, Located, Replaced, Unreadable, read_catalogue, read_findings};
 pub use rules::{Code, RULES, Rule, Scope, Severity};
 pub use tag::locale_key;
 
