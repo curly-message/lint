@@ -90,7 +90,7 @@ by naming it to
 `npm trust github @curly-message/lint --file publish.yml --repository curly-message/lint --environment release --allow-publish`,
 then the same for `@curly-message/eslint-plugin`.
 A trusted publisher can be registered only for a package that exists, so the
-first version of each, `1.0.0-next.0`, is published by hand from `main` by a
+first version of each, `1.0.0-next.0`, was published by hand from `main` by a
 maintainer of the scope (`npm ci && npm run build && npm publish --workspace lint --access public --tag next`,
 then the same for `eslint-plugin`); the workflow refuses to run for a package
 the registry does not know.
