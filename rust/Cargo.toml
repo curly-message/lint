@@ -19,7 +19,7 @@ default = ["cldr"]
 cldr = []
 
 [dependencies]
-curly-message-parser = "1.0.0-next.0"
+curly-message-parser = "1.0.0"
 unicode-properties = { version = "0.1.4", default-features = false, features = ["general-category"] }
 
 [dev-dependencies]
