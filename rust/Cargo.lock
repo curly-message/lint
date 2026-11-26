@@ -159,9 +159,9 @@ dependencies = [
 
 [[package]]
 name = "curly-message-parser"
-version = "1.0.0-next.0"
+version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f060a48fc922e382acf88750cef7e242245b28ede198eb7ae662a28a8148eb0a"
+checksum = "54c8c7ea1e67603823e6be2288d6d7aa71889206d3d05c171534bf96908d2b95"
 
 [[package]]
 name = "digest"
