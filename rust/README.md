@@ -26,7 +26,7 @@ codes.
 cargo install curly-message-lint@1.0.0-next.0
 ```
 
-installs the command, a prerelease being installed only by its version, and
+installs the command, and
 
 ```sh
 cargo add curly-message-lint

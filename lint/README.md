@@ -17,7 +17,7 @@ payload decides is what the parser reports while it resolves.
 ## Installation
 
 ```bash
-npm install --save-dev @curly-message/lint@next
+npm install --save-dev @curly-message/lint
 ```
 
 The rules are those of the Rust crate
