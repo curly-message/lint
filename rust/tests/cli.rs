@@ -35,8 +35,17 @@ fn tree(name: &str, files: &[(&str, &[u8])]) -> PathBuf {
     root
 }
 
+// Cargo's build of the command, or the one `CURLY_LINT_BIN` names, as a
+// package that ships the command installs it.
+fn program() -> PathBuf {
+    match std::env::var_os("CURLY_LINT_BIN") {
+        Some(path) => std::path::absolute(path).unwrap(),
+        None => PathBuf::from(env!("CARGO_BIN_EXE_curly-lint")),
+    }
+}
+
 fn command(cwd: &Path, argv: &[&str]) -> Command {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_curly-lint"));
+    let mut command = Command::new(program());
 
     command.current_dir(cwd).args(argv);
     command
