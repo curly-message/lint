@@ -1,6 +1,6 @@
 # Changelog
 
-### 1.0.0 (Unreleased)
+## 1.0.0
 
 The first version: a linter for messages and catalogues of the Curly Message
 Format, as a library and as the `curly-lint` command.

@@ -1,6 +1,6 @@
 {
   "name": "@curly-message/lint",
-  "version": "1.0.0-next.0",
+  "version": "1.0.0",
   "description": "Linter for the Curly Message Format: messages and catalogues, as a library and a CLI.",
   "type": "module",
   "sideEffects": false,
