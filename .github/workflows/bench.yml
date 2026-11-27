@@ -1,7 +1,8 @@
 name: Benchmark
 
 # The benchmark of a PR against its base, posted on the PR and in the job's
-# summary, one per workspace and one for the Rust crate. It fails where the benchmark does: a row of the
+# summary, one per workspace, one for the Rust crate and one for the Python
+# package. It fails where the benchmark does: a row of the
 # branch that fails, or, unless the PR carries the `bench-accepted` label, a
 # count that grew, a row gone missing or changing kind, or a row that fails on
 # the base. Whether the base has the workspace's benchmark is read from the
@@ -16,6 +17,7 @@ on:
       - lint/**
       - eslint-plugin/**
       - rust/**
+      - python/**
       - package.json
       - package-lock.json
       - '!**/*.md'
@@ -39,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [lint, eslint-plugin, rust]
+        package: [lint, eslint-plugin, rust, python]
 
     steps:
       - name: Checkout the branch
@@ -63,7 +65,7 @@ jobs:
       # A workspace's build compiles the core for WebAssembly, on the runner's
       # Rust, so a change to the crate is one to each workspace.
       - name: Setup Rust
-        if: matrix.package != 'rust'
+        if: matrix.package != 'rust' && matrix.package != 'python'
         run: rustup target add wasm32-unknown-unknown
 
       # The harness on rows that fail wherever two measurements share a
@@ -92,7 +94,7 @@ jobs:
       # benchmark has nothing to compare, so it is not built; one that does not
       # build leaves rows that fail, which the label can accept.
       - name: Install and build
-        if: matrix.package != 'rust'
+        if: matrix.package != 'rust' && matrix.package != 'python'
         env:
           HOLDS: ${{ steps.base.outputs.holds }}
         run: |
@@ -101,17 +103,26 @@ jobs:
           fi
           (cd change && npm ci --ignore-scripts && npm run build)
 
-      # The crate by its `bench/prepare.sh`, on the runner's Rust; the base
-      # under the same terms.
-      - name: Prepare the crate
-        if: matrix.package == 'rust'
+      # The Python package builds with the maturin its constraints pin,
+      # which uv installs.
+      - name: Setup uv
+        if: matrix.package == 'python'
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
+
+      # The crate and the Python package by their `bench/prepare.sh`, on the
+      # runner's Rust; the base under the same terms.
+      - name: Prepare the package
+        if: matrix.package == 'rust' || matrix.package == 'python'
         env:
           HOLDS: ${{ steps.base.outputs.holds }}
+          PACKAGE: ${{ matrix.package }}
         run: |
           if [ "$HOLDS" = true ]; then
-            (cd base/rust && sh bench/prepare.sh) || echo "::warning::The base did not build."
+            (cd "base/$PACKAGE" && sh bench/prepare.sh) || echo "::warning::The base did not build."
           fi
-          (cd change/rust && sh bench/prepare.sh)
+          (cd "change/$PACKAGE" && sh bench/prepare.sh)
 
       # Read when the job runs rather than off the event, so a re-run sees a
       # label added since.

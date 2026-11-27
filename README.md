@@ -18,6 +18,7 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 | [`lint/`](./lint) | `@curly-message/lint` | The rules, a library over them, and the `curly-lint` command for JSON catalogues: the crate compiled to WebAssembly, for Node, Bun and Deno. |
 | [`eslint-plugin/`](./eslint-plugin) | `@curly-message/eslint-plugin` | The rules a single message decides, as ESLint rules, for JSON and for messages in JavaScript and TypeScript. |
 | [`rust/`](./rust) | `curly-message-lint` | The rules, the catalogue reader and the `curly-lint` command in Rust: a crate and a native program, and the code the npm packages run. |
+| [`python/`](./python) | `curly-message-lint` on PyPI | The crate's `curly-lint` command as a native program, a wheel for each platform it is built for, for projects that install their tools from PyPI. |
 
 The library's README lists every rule. The command line runs all of them,
 those that compare one locale with another included. The plugin runs the ones a
@@ -48,7 +49,8 @@ which posts a table per workspace on the PR (a PR from a fork finds it in the
 job's summary). A count that grew, a row gone missing or changing kind, or a
 row that fails on the base fails the check unless the PR carries the
 `bench-accepted` label; adding or removing the label runs it again. The
-crate is measured the same way, by the commands its README names.
+crate and the Python package are measured the same way, by the commands their
+READMEs name.
 
 ## Releasing
 
@@ -140,6 +142,43 @@ registered only for a crate that exists, so the first version,
 `1.0.0-next.0`, was published by hand from `main` by an owner with an API
 token (`cd rust && cargo publish --locked -p curly-message-lint`); the
 workflow refuses to run for a crate crates.io does not know.
+
+### The Python package
+
+The Python package is released by the **Python publish** workflow
+(`.github/workflows/publish-python.yml`, started by hand with the kind of
+release), reading `python/CHANGELOG.md`'s pending section and the release
+types as the others do. PyPI has no dist-tags: `next` publishes a release
+candidate (`1.1.0rc0`, then `rc1`), which pip installs only when asked for a
+prerelease. The package carries the crate's command, so the workflow refuses a
+release while the crate on `main` is not the crate's newest release of its
+kind — the files it ships, and the dependencies and features it builds with on
+every target, held to those of the newest `rust-v` tag, a stable one for a
+stable release — or while `python/README.md` and the changelog's pending
+section do not name that release. It then runs **Python build**
+(`.github/workflows/build.yml`), which builds a wheel on each platform with
+the stable Rust it names, checks what each holds, runs the crate's tests for
+that target and `cli.rs` against the command the wheel installs, builds the
+sdist beside the x86-64 glibc wheel, builds the command from it on Rust 1.88,
+and, on the x86-64 glibc leg, writes the benchmark of the wheel and the sdist
+that leg built, the files published, into `python/BENCH.md`. The release job
+takes the nine files whose digests the build recorded, commits the version in
+`python/pyproject.toml` and `BENCH.md`, tags (`python-v1.1.0`), pushes,
+publishes to PyPI and publishes a GitHub release carrying the changelog
+section, never marked as the repository's latest. It runs in the same three
+jobs, with the same App and the same `release` environment. A release that
+stops once its tag exists is finished by re-running its failed jobs within 30
+days of the run or the build artifact's retention, whichever ends first, which
+builds nothing again: the files PyPI holds already pass where each is the one
+built, and the rest are uploaded. Re-running all jobs does not finish it,
+since a new build writes other wheels and another benchmark than the tag and
+PyPI hold. One that stops before its tag exists is dispatched again.
+
+PyPI holds no token: the workflow is the project's
+[trusted publisher](https://docs.pypi.org/trusted-publishers/) (repository
+owner `curly-message`, repository `lint`, workflow `publish-python.yml`,
+environment `release`), registered for the project `curly-message-lint` before
+its first version, which the workflow publishes.
 
 ## License
 

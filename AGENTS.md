@@ -29,6 +29,7 @@ JavaScript package, which runs the crate compiled to WebAssembly.
 | `lint/` | `@curly-message/lint`: the crate's rules as WebAssembly, a library over them and the `curly-lint` command |
 | `eslint-plugin/` | `@curly-message/eslint-plugin`: the rules a single message decides, as ESLint rules |
 | `rust/` | `curly-message-lint`: the rules, the catalogue reader and the `curly-lint` command; `rust/wasm/`, the binding the library is built from |
+| `python/` | `curly-message-lint` on PyPI: the crate's `curly-lint` command, a native program in a wheel per platform |
 
 - **Workspaces of one root**, because the plugin depends on the library and
   both change together: one lockfile at the root, one `npm ci`, each
@@ -48,10 +49,15 @@ JavaScript package, which runs the crate compiled to WebAssembly.
   run against the source compiles the core first, and `npm run dev` before
   it watches the TypeScript, which it does not compile again: a change under
   `rust/` while it watches takes `npm run build`.
+- **`python/` is outside both**: a pyproject that maturin builds from the
+  crate's manifest, and two scripts of the standard library alone,
+  `build.py`, which runs maturin, and `tests/dist.py`, which checks what it
+  built; the package ships no Python. Run its commands from `python/`.
 - **Release tags are namespaced by directory** — `lint-v1.0.0`,
-  `eslint-plugin-v1.0.0`, `rust-v1.0.0` — and the publish workflows cut them
-  (`.github/workflows/publish.yml` for the workspaces, `publish-rust.yml` for
-  the crate; the README's Releasing section says what they do).
+  `eslint-plugin-v1.0.0`, `rust-v1.0.0`, `python-v1.0.0` — and the publish
+  workflows cut them (`.github/workflows/publish.yml` for the workspaces,
+  `publish-rust.yml` for the crate, `publish-python.yml` for the Python
+  package; the README's Releasing section says what they do).
 - **The lockfile is written with npm 11** (`npx npm@11 install`). npm 10 fails
   to resolve the workspaces' peer dependencies, though it installs from the
   lockfile (`npm ci`) as CI's Node 22 does.
@@ -92,7 +98,18 @@ Tech stack of `rust/` — **ground truth, do not assume otherwise**:
 | Lint | rustfmt and Clippy, at the lints `Cargo.toml` denies: a panic, an index, a slice of a `str`, unchecked arithmetic, a character outside ASCII in a literal, a write to the standard streams |
 | Features | `cldr`, default: the plural rules of the Unicode CLDR as data in the crate (`cldr/`, under the Unicode License v3), which the binary requires |
 | Dependencies | `curly-message-parser`, and `unicode-properties` for the characters a report shows by code point; `serde_json`, `sha2` and `libtest-mimic` for the tests alone |
-| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml`, `publish-rust.yml`; a change under `rust/` runs the npm jobs and benchmarks too, which build it |
+| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml`, `publish-rust.yml`; a change under `rust/` runs the npm jobs and benchmarks too, which build it, and `tests-python.yml` and the `python` leg of `bench.yml`, which ship it |
+
+Tech stack of `python/` — **ground truth, do not assume otherwise**:
+
+| | |
+|---|---|
+| Package | `curly-message-lint` on PyPI, the `curly-lint` command alone, no Python API; unreleased, its first version published by the workflow through the trusted publisher already registered. Its own version line; the README and the changelog name the crate release each version carries |
+| Build | maturin (`bindings = "bin"`, the crate's manifest, `--locked`), hash-pinned with `ziglang` in `build-constraints.txt`, through `build.py`, which writes this machine's paths as names unless `RUSTFLAGS` or `CARGO_ENCODED_RUSTFLAGS` is set; the C runtime linked statically on Windows, by the `config` of `pyproject.toml`, which a build from the sdist reads too; one named stable Rust in `build.yml` |
+| Platforms | a wheel each for `manylinux_2_17` (zig) and `musllinux_1_2` on x86-64 and ARM64, `macosx_10_12_x86_64`, `macosx_11_0_arm64`, `win_amd64` and `win_arm64`, tagged `py3-none`, with no `requires-python`; the sdist, built by Rust 1.88 or newer |
+| Tests | on each platform's leg: `tests/dist.py` on what the build wrote (a Windows command that imports a C runtime DLL fails it), the crate's `cargo test` for that target, and `rust/tests/cli.rs` against the command the wheel installs through pip (on Alpine for musl); the sdist built on Rust 1.88 and held to `cli.rs` |
+| Licenses | `LICENSE` and `THIRD-PARTY-NOTICES.md` in every wheel, the notices held by `tests/dist.py` to the SBOM maturin writes: a crate the binary gains is a row there |
+| CI | `tests-python.yml` (calls `build.yml`, filtered by path, so never a required check), the `python` leg of `bench.yml`, `publish-python.yml` |
 
 Commands, run from the root:
 
@@ -104,6 +121,17 @@ Commands, run from the root:
 | `npm run bench --workspace <path>` | build, then the workspace's benchmark (`<path>/bench/rows.mjs`) |
 | `npm run bench --workspace <path> -- --compare <dir>` | the same, beside the workspace checked out and built at `<dir>` — what `bench.yml` runs on a PR |
 | `npm run lint:fix` | fix what the formatting contract reports |
+
+Commands, run from `python/`:
+
+| Command | What it does |
+|---------|--------------|
+| `uv venv .build && uv pip install --python .build --require-hashes -r build-constraints.txt` | the build tools, as CI installs them |
+| `.build/bin/python build.py build --release --locked -o dist`, `.build/bin/python build.py sdist -o dist` | the wheel for this machine, and the sdist (`--target` and `--zig --compatibility manylinux_2_17` as `build.yml` passes them) |
+| `python -I tests/dist.py dist <platform tag>` | hold what the build wrote to what the package ships |
+| `CURLY_LINT_BIN=<installed curly-lint> cargo test -p curly-message-lint --locked --test cli`, from `rust/` | `cli.rs` against an installed wheel's command |
+| `sh bench/prepare.sh && node bench/harness.mjs` | build and install into `bench/`, then the benchmark (`bench/rows.mjs`) |
+| `node bench/harness.mjs --compare <dir>` | the same, beside the package prepared at `<dir>` — what `bench.yml` runs on a PR |
 
 Commands, run from `rust/`:
 
@@ -158,9 +186,10 @@ in place of the host's; `fixtures/schema.json` is their schema and
 Each workspace's `bench/rows.mjs` lists the rows of its benchmark, each read
 off the build. `bench/harness.mjs` at the root measures them for both,
 `bench/check/` beside it holds the rows it is checked on, and both are the same
-in every repository of the family. `rust/bench/` holds its own copies of
-both, which `tests.yml` holds to the root's, and rows that read the release
-build over a child process.
+in every repository of the family. `rust/bench/` and `python/bench/` hold
+their own copies of both, which `tests.yml` holds to the root's, and rows
+that read a release build: the crate's over a child process, and the Python
+package's wheel, sdist and installed command.
 
 ## The format decides, not the linter
 
@@ -256,6 +285,11 @@ editors on every keystroke.
 - `lint/THIRD-PARTY-NOTICES.md` lists what the compiled core holds, with the
   terms of each, and ships in the tarball: a dependency the crate gains
   without `cldr` is a row there.
+- `python/README.md` is the PyPI page and names, with `python/CHANGELOG.md`,
+  the crate release the package carries; `python/THIRD-PARTY-NOTICES.md`
+  lists what the native command holds, the CLDR's data, the Rust standard
+  library and what each platform links in among it, and ships in every
+  wheel.
 - A finding's message is English, says what is wrong and what happens instead,
   and quotes what it is about in backticks.
 
