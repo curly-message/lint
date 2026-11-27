@@ -1,0 +1,6 @@
+# What maturin, bench/prepare.sh and a local build write.
+bench/.venv/
+bench/.build/
+*.whl
+*.tar.gz
+.build/

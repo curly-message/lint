@@ -1,0 +1,37 @@
+[build-system]
+requires = ["maturin>=1.16,<2"]
+build-backend = "maturin"
+
+[project]
+name = "curly-message-lint"
+version = "0.0.0"
+description = "The curly-lint command, a linter for the Curly Message Format, as a native program."
+readme = "README.md"
+license = "MIT AND Unicode-3.0 AND Apache-2.0 WITH LLVM-exception"
+license-files = ["LICENSE", "THIRD-PARTY-NOTICES.md"]
+keywords = ["curly-message", "i18n", "lint", "translation", "catalogue"]
+classifiers = [
+  "Development Status :: 5 - Production/Stable",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Topic :: Software Development :: Internationalization",
+  "Topic :: Software Development :: Localization",
+  "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.urls]
+Homepage = "https://curlymessage.dev/"
+Repository = "https://github.com/curly-message/lint"
+Changelog = "https://github.com/curly-message/lint/blob/main/python/CHANGELOG.md"
+Issues = "https://github.com/curly-message/spec/issues"
+
+# The crate's `curly-lint` binary, as a script of the wheel: the wheel runs no
+# Python, so it is tagged `py3-none` and states no Python it requires.
+[tool.maturin]
+bindings = "bin"
+manifest-path = "../rust/Cargo.toml"
+locked = true
+strip = true
+# The C runtime linked into the command on Windows, which a clean Windows
+# does not carry as a DLL; read by a build from the sdist too.
+config = ["target.'cfg(all(windows, target_env = \"msvc\"))'.rustflags = ['-Ctarget-feature=+crt-static']"]
