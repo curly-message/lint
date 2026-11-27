@@ -1,0 +1,435 @@
+name: Go publish
+
+# The go command reads a module from a repository's tree at a tag, and a
+# program cannot be built into one by a project's own go command. So a
+# release commits and tags `go-vX.Y.Z` here, as every package of the family
+# is tagged, and pushes to the repository curly-message/lint-go, which
+# nothing else writes to, a commit that holds `go/` as that tag holds it, but
+# for `BENCH.md`, with the native command of each platform beside the
+# launcher, built from the same tag; tagged `vX.Y.Z` there, the only spelling
+# the go command reads a version from. No registry credential exists: what
+# the module proxy serves is what the App pushed.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'next cuts a prerelease (vX.Y.Z-next.N); patch, minor and major cut a release'
+        required: true
+        default: next
+        type: choice
+        options:
+          - next
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: read
+
+env:
+  MIRROR: curly-message/lint-go
+  MODULE: github.com/curly-message/lint-go
+
+# After the tests, a release runs in three jobs, so that no code a dependency
+# ships runs where the release's credentials are: `version` settles what is
+# released, `build` builds and tests each platform's command, packs the
+# module and tests and benchmarks it with no credential that can push, and
+# `release` holds the App's key and takes the build as files. Of the three,
+# only `build` runs a dependency's code.
+jobs:
+  tests:
+    uses: ./.github/workflows/tests-go.yml
+
+  version:
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: go
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      section: ${{ steps.version.outputs.section }}
+      patch: ${{ steps.bump.outputs.patch }}
+      changes: ${{ steps.bump.outputs.changes }}
+
+    steps:
+      - name: Refuse anything but main
+        working-directory: .
+        run: |
+          [ "$GITHUB_REF" = refs/heads/main ] || { echo "::error::A release is cut from main only, not from $GITHUB_REF_NAME."; exit 1; }
+
+      # No credential stays in a checkout for what runs after it to read.
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # The changelog's pending section names the version it will be released
+      # as. `patch`, `minor` and `major` cut that section and must arrive at
+      # the version it names. `next` cuts a prerelease of it (X.Y.Z-next.0,
+      # then .1) and leaves the section open. package.json holds the version,
+      # for `go/pack.sh` and the benchmark's table to read and for
+      # `npm version` to bump. The module's path names no major version, so
+      # the go command reads no version of it past v1.
+      - name: Bump the version
+        id: version
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          case "$RELEASE" in
+            next) tag=next ;;
+            patch|minor|major) tag=latest ;;
+            *) echo "::error::Unknown release type '$RELEASE'; expected next, patch, minor or major."; exit 1 ;;
+          esac
+          # One spelling of the heading, read by the gate, by the version it
+          # names and by the rewrite.
+          heading='### ([0-9]+\.[0-9]+\.[0-9]+) \(Unreleased\)'
+          sections=$(grep -cE "^$heading$" CHANGELOG.md) || sections=0
+          [ "$sections" = 1 ] || { echo "::error::CHANGELOG.md holds $sections sections headed '### <major.minor.patch> (Unreleased)'; a release reads exactly one."; exit 1; }
+          declared=$(sed -nE "s/^$heading$/\1/p" CHANGELOG.md)
+          before=$(node -p "require('./package.json').version")
+          if [ "$RELEASE" = next ]; then
+            case "$before" in
+              "$declared"-next.*) npm version prerelease --preid=next --no-git-tag-version ;;
+              *) npm version "$declared-next.0" --no-git-tag-version ;;
+            esac
+          else
+            npm version "$RELEASE" --no-git-tag-version
+          fi
+          version=$(node -p "require('./package.json').version")
+          case "$version" in
+            0.*|1.*) ;;
+            *) echo "::error::$version is past v1, which the go command reads only from a module whose path ends in its major version: $MODULE has none."; exit 1 ;;
+          esac
+          section="### $declared (Unreleased)"
+          awk -v heading="$section" '$0 == heading { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md > "$RUNNER_TEMP/section.md"
+          if [ "$tag" = latest ]; then
+            [ "$version" = "$declared" ] || { echo "::error::$RELEASE over $before is $version, and CHANGELOG.md's pending section names $declared. Release what the section names, or rewrite its heading."; exit 1; }
+            sed -i -E "s/^$heading$/## \1/" CHANGELOG.md
+            section="## $version"
+          fi
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "section=$section"
+          } >> "$GITHUB_OUTPUT"
+
+      # The module carries the crate's command, so a release carries nothing
+      # of the crate that no release of it holds: the files the crate ships,
+      # but for the manifests cargo writes, and the dependencies and features
+      # it builds with on every target are to be those of its newest release,
+      # its newest stable one for a stable release here. The README and the
+      # changelog's pending section name that release, as the version this
+      # one carries.
+      - name: Check the crate is released
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git fetch --quiet --no-tags origin 'refs/tags/rust-v*:refs/tags/rust-v*'
+          released=$(git tag -l 'rust-v*' | sed 's/^rust-v//')
+          case "$VERSION" in *-*) ;; *) released=$(grep -v -- - <<< "$released" || true) ;; esac
+          [ -n "$released" ] || { echo "::error::No release of the crate is tagged for this one to carry."; exit 1; }
+          # A `~` makes sort -V read a prerelease before its release.
+          crate=$(sed -E 's/-/~&/' <<< "$released" | sort -V | tail -n 1 | tr -d '~')
+          git worktree add --quiet --detach "$RUNNER_TEMP/crate" "rust-v$crate"
+          shipped() {
+            (
+              cd "$1/rust"
+              cargo package --list --locked -p curly-message-lint | grep -vxE 'Cargo\.toml|Cargo\.toml\.orig|Cargo\.lock|\.cargo_vcs_info\.json' | while IFS= read -r file; do sha256sum -- "$file"; done
+              cargo tree -e normal --format '{p} {f}' --locked -p curly-message-lint --target all | sed -E 's/ \([^()]*\)//'
+            )
+          }
+          shipped "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/here.txt"
+          shipped "$RUNNER_TEMP/crate" > "$RUNNER_TEMP/released.txt"
+          diff "$RUNNER_TEMP/released.txt" "$RUNNER_TEMP/here.txt" || { echo "::error::The crate on main is not rust-v$crate, the newest release of its kind: release the crate first."; exit 1; }
+          named="\`curly-message-lint\` ${crate//./\\.}([ ,;)]|\.( |$))"
+          tr '\n' ' ' < README.md | grep -qE "$named" || { echo "::error::README.md does not name \`curly-message-lint\` $crate as the crate this version carries."; exit 1; }
+          tr '\n' ' ' < "$RUNNER_TEMP/section.md" | grep -qE "$named" || { echo "::error::CHANGELOG.md's pending section does not name \`curly-message-lint\` $crate as the crate this version carries."; exit 1; }
+
+      # The other jobs check out the same commit and apply the bump as this
+      # patch, held to the files it changed here.
+      - name: Record the bump
+        id: bump
+        working-directory: .
+        run: |
+          {
+            echo "patch=$(git diff --binary | base64 -w0)"
+            echo "changes=$(git status --porcelain | cut -c4- | paste -sd ' ' -)"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: version
+    uses: ./.github/workflows/build-go.yml
+    with:
+      patch: ${{ needs.version.outputs.patch }}
+      changes: ${{ needs.version.outputs.changes }}
+      benchmark: true
+
+  # Nothing is pushed until everything is checked: the release commit and
+  # both tags are made locally, the mirror's commit is held to the tree the
+  # build packed and tested, both remotes are checked for what is already
+  # there, and both pushes are tried dry. This repository is pushed first, so
+  # that a version the proxy serves is on main here. A run that stops after
+  # a push landed is finished by re-running its failed jobs, which push only
+  # what each repository lacks of the same trees (see the README).
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    environment: release
+    concurrency: publish-go
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+        working-directory: go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Apply the bump
+        working-directory: .
+        env:
+          PATCH: ${{ needs.version.outputs.patch }}
+          CHANGES: ${{ needs.version.outputs.changes }}
+        run: |
+          base64 -d <<< "$PATCH" | git apply
+          changes=$(git status --porcelain | cut -c4- | paste -sd ' ' -)
+          [ "$changes" = "$CHANGES" ] || { echo "::error::The bump changes '$changes' here and changed '$CHANGES' where it was made."; exit 1; }
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
+      # Into a directory of its own, so nothing the build carries lands where
+      # git would read it.
+      - name: Download the module
+        uses: actions/download-artifact@v8
+        with:
+          name: build-module
+          path: ${{ runner.temp }}/build
+
+      # Only the six commands the build recorded are taken, each held to its
+      # digest, with the BENCH.md measured on the module they were packed
+      # into; nothing else of the build is read.
+      - name: Take the build
+        env:
+          DIGESTS: ${{ needs.build.outputs.digests }}
+        run: |
+          expected=$(tr ',' '\n' <<< "$DIGESTS" | sed '/^$/d' | LC_ALL=C sort)
+          [ "$(wc -l <<< "$expected")" = 6 ] || { echo "::error::The build recorded $(wc -l <<< "$expected") commands, where the module holds six."; exit 1; }
+          # On its own, so that a find which cannot read the build fails the step.
+          others=$(cd "$RUNNER_TEMP/build/commands" && find . -mindepth 1 \( ! -type f -o ! -name 'curly-lint-*' \))
+          [ -f "$RUNNER_TEMP/build/BENCH.md" ] && [ ! -L "$RUNNER_TEMP/build/BENCH.md" ] && [ -z "$others" ] || { echo "::error::The build is to hold its commands and a BENCH.md file, as files."; exit 1; }
+          built=$(cd "$RUNNER_TEMP/build/commands" && sha256sum -- * | sed -E 's/^([0-9a-f]+) [ *](.*)$/\1:\2/' | LC_ALL=C sort)
+          [ "$built" = "$expected" ] || { echo "::error::The build holds $built, and its legs built $expected."; exit 1; }
+          cp "$RUNNER_TEMP/build/BENCH.md" .
+          git add BENCH.md
+
+      # The release commit, its tags and the GitHub releases are the App's:
+      # its token passes the rules on main, and unlike the workflow's own
+      # token, it can push to the other repository.
+      - name: Mint the release token
+        id: app
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          repositories: |
+            lint
+            lint-go
+          permission-contents: write
+
+      # The commit and the tag of the release here. Where the tag is on origin
+      # already, a re-run of this job finishes the release it names: the
+      # commit made here holds the tagged tree, and the steps after this one
+      # run on the tagged commit.
+      - name: Commit and tag
+        id: tag
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          APP: ${{ steps.app.outputs.app-slug }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          id=$(gh api "/users/${APP}[bot]" --jq .id)
+          git config user.name "${APP}[bot]"
+          git config user.email "$id+${APP}[bot]@users.noreply.github.com"
+          git commit --all --message "chore(go): release $MODULE@v$VERSION"
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          prefix="go-v"
+          tag="$prefix$VERSION"
+          tags=$(git ls-remote --tags origin "refs/tags/$prefix*")
+          versions=$(sed -n "s|^[0-9a-f]*[[:space:]]refs/tags/$prefix\([^^]*\)$|\1|p" <<< "$tags")
+          if ! grep -qxF "$VERSION" <<< "$versions"; then
+            git tag --annotate --message "$MODULE@v$VERSION" "$tag"
+            echo "push=true" >> "$GITHUB_OUTPUT"
+          else
+            git fetch --no-tags --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+            [ "$(git rev-parse "$tag^{tree}")" = "$(git rev-parse 'HEAD^{tree}')" ] || { echo "::error::$tag holds another release than the one this run commits."; exit 1; }
+            # A stable release is held to the stable releases alone, and a
+            # prerelease to every release. A `~` makes sort -V read a
+            # prerelease before its release.
+            compared=$versions
+            case "$VERSION" in *-*) ;; *) compared=$(sed -E '/-/d' <<< "$versions") ;; esac
+            newest=$({ echo "$compared"; echo "$VERSION"; } | sed -E 's/-/~&/' | sort -V | tail -n 1)
+            [ "${newest//\~/}" = "$VERSION" ] || { echo "::error::$prefix${newest//\~/} is tagged after $tag, and a release is finished before the next one is released."; exit 1; }
+            git reset --soft "$tag^{commit}"
+            echo "::notice::$tag holds this release already, so the run finishes it from there and pushes nothing here."
+            echo "push=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # What the mirror holds at the version: `go/` as the tag holds it, but
+      # for BENCH.md, which was measured on this very tree, and each command
+      # where the launcher embeds it from. The tree is the one the build
+      # packed, had the go command fetch, and tested on each platform. Its
+      # commit follows the mirror's main, or begins it. Where the mirror
+      # holds the version's tag already, on this tree, nothing is pushed
+      # there.
+      - name: Make the mirror's commit
+        id: mirror
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TREE: ${{ needs.build.outputs.tree }}
+        run: |
+          export GIT_INDEX_FILE="$RUNNER_TEMP/mirror.index"
+          git read-tree "go-v$VERSION^{commit}:go"
+          git update-index --force-remove BENCH.md
+          for command in "$RUNNER_TEMP"/build/commands/curly-lint-*; do
+            blob=$(git hash-object -w --no-filters -- "$command")
+            git update-index --add --cacheinfo "100644,$blob,cmd/curly-lint/bin/$(basename "$command")"
+          done
+          tree=$(git write-tree)
+          unset GIT_INDEX_FILE
+          [ "$tree" = "$TREE" ] || { echo "::error::The mirror's tree is $tree here and was $TREE where it was packed and tested."; exit 1; }
+
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          mirror="https://github.com/$MIRROR.git"
+          refs=$(git ls-remote "$mirror" refs/heads/main "refs/tags/v$VERSION")
+          if grep -q "refs/tags/v$VERSION$" <<< "$refs"; then
+            git fetch --quiet --no-tags --depth=1 "$mirror" "refs/tags/v$VERSION:refs/tags/v$VERSION"
+            [ "$(git rev-parse "v$VERSION^{tree}")" = "$tree" ] || { echo "::error::v$VERSION on $MIRROR holds another tree than $tree, the one this release packed. A version the go command may have read is never moved: release the next version, with a retract directive for this one."; exit 1; }
+            echo "::notice::$MIRROR holds v$VERSION as this release packed it, so nothing is pushed there."
+            echo "push=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          parent=()
+          if grep -q 'refs/heads/main$' <<< "$refs"; then
+            git fetch --quiet --no-tags --depth=1 "$mirror" refs/heads/main
+            parent=(-p "$(git rev-parse FETCH_HEAD)")
+          fi
+          commit=$(git commit-tree "$tree" "${parent[@]}" -m "chore: release $MODULE@v$VERSION")
+          git tag --annotate --message "$MODULE@v$VERSION" "v$VERSION" "$commit"
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "push=true" >> "$GITHUB_OUTPUT"
+
+      # Each push atomic: a branch and its tag land together or not at all.
+      # Neither is forced, and both are tried dry before either is made. The
+      # token reaches git through the environment of this step alone.
+      - name: Push
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          HERE: ${{ steps.tag.outputs.push }}
+          THERE: ${{ steps.mirror.outputs.push }}
+          COMMIT: ${{ steps.mirror.outputs.commit }}
+        run: |
+          export GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader
+          GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          export GIT_CONFIG_VALUE_0
+          mirror="https://github.com/$MIRROR.git"
+          here=(origin main "go-v$VERSION")
+          there=("$mirror" "$COMMIT:refs/heads/main" "v$VERSION")
+          if [ "$HERE" = true ]; then git push --dry-run --atomic "${here[@]}"; fi
+          if [ "$THERE" = true ]; then git push --dry-run --atomic "${there[@]}"; fi
+          if [ "$HERE" = true ]; then git push --atomic "${here[@]}"; fi
+          if [ "$THERE" = true ]; then
+            git push --atomic "${there[@]}" || { echo "::error::go-v$VERSION is on this repository and v$VERSION is not on $MIRROR. Re-run this run's failed jobs, which push only what $MIRROR lacks."; exit 1; }
+          fi
+
+      # Asking the proxy for the version records it, and the checksum
+      # database with it, and shows it on pkg.go.dev. The proxy answers
+      # "not found" for up to half an hour to whoever asked for the version
+      # before its tag was there, so only that answer is waited on. By now
+      # the version cannot be taken back, so a hash other than the build's
+      # fails the run to say so, and the remedy is a later version that
+      # retracts it.
+      - name: Confirm the version on the module proxy
+        working-directory: ${{ runner.temp }}
+        env:
+          GOPROXY: https://proxy.golang.org
+          GOFLAGS: -modcacherw
+          GOWORK: 'off'
+          GOMODCACHE: ${{ runner.temp }}/confirmed
+          VERSION: ${{ needs.version.outputs.version }}
+          SUM: ${{ needs.build.outputs.sum }}
+        run: |
+          for attempt in $(seq 1 70); do
+            if found=$(go mod download -json "$MODULE@v$VERSION"); then
+              sum=$(jq -r .Sum <<< "$found")
+              [ "$sum" = "$SUM" ] || { echo "::error::The proxy records $MODULE@v$VERSION as $sum, and the build hashed it as $SUM. The tag is never moved: release the next version, with a retract directive for this one."; exit 1; }
+              echo "$MODULE@v$VERSION is on the module proxy as $sum."
+              exit 0
+            fi
+            error=$(jq -r '.Error // empty' <<< "$found")
+            grep -qE '404 Not Found|410 Gone' <<< "$error" || { echo "::error::The module proxy answers for $MODULE@v$VERSION: $error"; exit 1; }
+            echo "Attempt $attempt: $error"
+            sleep 30
+          done
+          echo "::error::The module proxy did not serve $MODULE@v$VERSION within 35 minutes. Re-run this run's failed jobs, which push nothing again and ask once more."
+          exit 1
+
+      # One release per tag, in each repository: this one's of `go-vX.Y.Z`,
+      # never marked as its latest, and the mirror's of `vX.Y.Z`. The notes
+      # are the changelog section this release names, the one just cut or,
+      # for a prerelease, the pending one it leaves open, then the SHA-256 of
+      # each command the module holds and the hash the checksum database
+      # records the module under. A published release passes.
+      - name: Publish the GitHub releases
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+          TAG: ${{ needs.version.outputs.tag }}
+          SECTION: ${{ needs.version.outputs.section }}
+          DIGESTS: ${{ needs.build.outputs.digests }}
+          SUM: ${{ needs.build.outputs.sum }}
+        run: |
+          {
+            awk -v heading="$SECTION" '$0 == heading { on = 1; next } /^## / { on = 0 } on' CHANGELOG.md
+            printf '\nThe module is `%s@v%s`, which the checksum database records as `%s`. It holds these commands, built from `go-v%s`:\n\n| Command | SHA-256 |\n|---------|---------|\n' "$MODULE" "$VERSION" "$SUM" "$VERSION"
+            tr ',' '\n' <<< "$DIGESTS" | sed '/^$/d' | LC_ALL=C sort -t: -k2 | sed -E 's/^([0-9a-f]+):(.*)$/| `cmd\/curly-lint\/bin\/\2` | `\1` |/'
+          } > "$RUNNER_TEMP/notes.md"
+          [ "$TAG" = next ] && prerelease=--prerelease || prerelease=
+          for release in "$GITHUB_REPOSITORY go-v$VERSION never" "$MIRROR v$VERSION ${prerelease:+never}"; do
+            read -r repo tag latest <<< "$release"
+            if ! found=$(gh release view "$tag" --repo "$repo" --json isDraft 2> "$RUNNER_TEMP/release.err"); then
+              grep -qx 'release not found' "$RUNNER_TEMP/release.err" || { cat "$RUNNER_TEMP/release.err" >&2; exit 1; }
+            fi
+            if [ -n "$found" ]; then
+              [ "$(jq -r .isDraft <<< "$found")" = false ] || { echo "::error::The GitHub release $tag of $repo is a draft, which this workflow does not leave: publish or delete it, then re-run."; exit 1; }
+              echo "::notice::The GitHub release $tag of $repo is published already."
+              continue
+            fi
+            gh release create "$tag" --repo "$repo" --verify-tag --title "$MODULE@v$VERSION" --notes-file "$RUNNER_TEMP/notes.md" ${prerelease:+"$prerelease"} ${latest:+--latest=false}
+          done

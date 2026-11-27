@@ -1,9 +1,9 @@
 name: Benchmark
 
 # The benchmark of a PR against its base, posted on the PR and in the job's
-# summary, one per workspace, one for the Rust crate and one for the Python
-# package. It fails where the benchmark does: a row of the
-# branch that fails, or, unless the PR carries the `bench-accepted` label, a
+# summary, one per workspace, one for the Rust crate, one for the Python
+# package and one for the Go module. It fails where the benchmark does: a
+# row of the branch that fails, or, unless the PR carries the `bench-accepted` label, a
 # count that grew, a row gone missing or changing kind, or a row that fails on
 # the base. Whether the base has the workspace's benchmark is read from the
 # base commit: one without its `bench/rows.mjs`, as the base of the PR that
@@ -18,6 +18,7 @@ on:
       - eslint-plugin/**
       - rust/**
       - python/**
+      - go/**
       - package.json
       - package-lock.json
       - '!**/*.md'
@@ -41,7 +42,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [lint, eslint-plugin, rust, python]
+        package: [lint, eslint-plugin, rust, python, go]
 
     steps:
       - name: Checkout the branch
@@ -65,7 +66,7 @@ jobs:
       # A workspace's build compiles the core for WebAssembly, on the runner's
       # Rust, so a change to the crate is one to each workspace.
       - name: Setup Rust
-        if: matrix.package != 'rust' && matrix.package != 'python'
+        if: matrix.package == 'lint' || matrix.package == 'eslint-plugin'
         run: rustup target add wasm32-unknown-unknown
 
       # The harness on rows that fail wherever two measurements share a
@@ -94,7 +95,7 @@ jobs:
       # benchmark has nothing to compare, so it is not built; one that does not
       # build leaves rows that fail, which the label can accept.
       - name: Install and build
-        if: matrix.package != 'rust' && matrix.package != 'python'
+        if: matrix.package == 'lint' || matrix.package == 'eslint-plugin'
         env:
           HOLDS: ${{ steps.base.outputs.holds }}
         run: |
@@ -111,10 +112,19 @@ jobs:
         with:
           enable-cache: false
 
-      # The crate and the Python package by their `bench/prepare.sh`, on the
-      # runner's Rust; the base under the same terms.
+      # The Go module is packed and installed by the oldest Go it states.
+      - name: Setup Go
+        if: matrix.package == 'go'
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: change/go/go.mod
+          cache: false
+
+      # The crate, the Python package and the Go module by their
+      # `bench/prepare.sh`, on the runner's Rust; the base under the same
+      # terms.
       - name: Prepare the package
-        if: matrix.package == 'rust' || matrix.package == 'python'
+        if: matrix.package == 'rust' || matrix.package == 'python' || matrix.package == 'go'
         env:
           HOLDS: ${{ steps.base.outputs.holds }}
           PACKAGE: ${{ matrix.package }}
