@@ -211,10 +211,23 @@ jobs:
         run: cargo build -p curly-message-lint --lib --no-default-features --target wasm32-unknown-unknown --locked
 
       # The harness and the rows it is checked on are the family's, the same
-      # file in every package: the crate's copies and the Python package's.
+      # file in every package: the crate's copies, the Python package's and
+      # the Go module's.
       - name: Benchmark harness
         run: |
-          for package in . ../python; do
+          for package in . ../python ../go; do
             cmp "$package/bench/harness.mjs" ../bench/harness.mjs
             diff -r "$package/bench/check" ../bench/check
           done
+
+      # The Go module is served from a repository of its own, so it holds a
+      # copy of the license, and its notices list what the Python package's
+      # do of the same commands: each row's subject and terms, and every
+      # license text.
+      - name: The Go module's license and notices
+        run: |
+          cmp ../go/LICENSE ../LICENSE
+          rows() { grep '^| ' "$1" | cut -d'|' -f2,4; }
+          texts() { sed -n '/^## /,$p' "$1"; }
+          diff <(rows ../python/THIRD-PARTY-NOTICES.md) <(rows ../go/THIRD-PARTY-NOTICES.md)
+          diff <(texts ../python/THIRD-PARTY-NOTICES.md) <(texts ../go/THIRD-PARTY-NOTICES.md)
