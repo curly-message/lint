@@ -211,8 +211,10 @@ jobs:
         run: cargo build -p curly-message-lint --lib --no-default-features --target wasm32-unknown-unknown --locked
 
       # The harness and the rows it is checked on are the family's, the same
-      # file in every package.
+      # file in every package: the crate's copies and the Python package's.
       - name: Benchmark harness
         run: |
-          cmp bench/harness.mjs ../bench/harness.mjs
-          diff -r bench/check ../bench/check
+          for package in . ../python; do
+            cmp "$package/bench/harness.mjs" ../bench/harness.mjs
+            diff -r "$package/bench/check" ../bench/check
+          done

@@ -1,0 +1,35 @@
+# maturin, which builds the wheels and the sdist, and the zig it links the
+# glibc wheels with, pinned with hashes; every build installs them from here
+# (`uv pip install --require-hashes -r build-constraints.txt`).
+# Regenerate with:
+#   printf "maturin==<version>\nziglang==<version> ; sys_platform == 'linux'\n" \
+#     | uv pip compile - --generate-hashes --universal --no-header --no-annotate \
+#       -o build-constraints.txt
+maturin==1.16.0 \
+    --hash=sha256:131fcc17ddb3ccc48aa183d2172ebf994c322b858e1b9694fb8744d783df66f6 \
+    --hash=sha256:13e69ca12542999d8c5467131de72a49bb76e4c284b9a45c5783df7c0fcb3a8a \
+    --hash=sha256:2216d731c9324869d3bff72c0c73009bb6e640b3fa7d340174ae70dc874d1d9f \
+    --hash=sha256:399fadcd4af39532a173e010240c34930eacc1bb1746bb179863481c68bcf1ab \
+    --hash=sha256:5b0573a146803f24566f5b301a4572a8e49bcab4917175407c730da13b46e134 \
+    --hash=sha256:609228d639c5b888dc41364cbd318547a59f027481f53cba85838f46da4b3f02 \
+    --hash=sha256:7001fd3ac591820d01f2fa041552c367ec587c98649d9f10a817cc7f28e59062 \
+    --hash=sha256:837db2f4d93d4899c3ac393fb3cc9eebf35b6002336e5d574f4a4fb6c49fe283 \
+    --hash=sha256:95f34ce53249fb7095ff4f2aff64d2562c511d6edf3e216c15dbffcd82b72b4f \
+    --hash=sha256:9d43a2adf51a2794e907a8f7dbad06eb114d5edb0909c73c1fa9040f15e584e9 \
+    --hash=sha256:9e221c047931caa79283cc0c2278904ae1b25880dde3574b0447657d72907689 \
+    --hash=sha256:c16d3589cbddda9420237fdb1394b1a9b36483c0bce83b23de6118c908a8e940 \
+    --hash=sha256:deacbb204a20326862e194c7df4958e0514a0411c9a3ccf228a00067c11b5c7e \
+    --hash=sha256:e285ec9eb10243d45d10417178cb2eb76e0cbb184d0aa4378b503489fa12ee78
+ziglang==0.17.1 ; sys_platform == 'linux' \
+    --hash=sha256:09953b6af7f64168b915180a42774f520f92d86ef6331b28e33915c7e1f0bb23 \
+    --hash=sha256:27a8da5f8eaa0e76ebbc7c2594130ed4646c1101ada2ce0aa86fe580c74154b9 \
+    --hash=sha256:4e0b4b9c02b8d0d220e9948010f860b62ff11d96abb39762eca5fa2ef3f7bc97 \
+    --hash=sha256:69c3dfc3aff6a297ec4017aa904782c0e450eb988982d7f675d83edce27526fb \
+    --hash=sha256:7ec229ead4a08f3bc537ed33fa8c0f811739b81a0d05afbea89db30afb4df1cc \
+    --hash=sha256:87f24e5cdca55f5d47c1e20570eebb61a53957fafe4c35c69740e13affe407ba \
+    --hash=sha256:ae28f1f1150b95c8b1bb5e185d18e6c542877dc480e2476ccc81dac41f191b71 \
+    --hash=sha256:b7c5f02fccd40f89b999ee16a1f5ddced56e6182370f8affe494bcf8a28cf07e \
+    --hash=sha256:d0549d5db63961ad9ed83ef628a45e3309542410dbcb6010116f4f2a3274d966 \
+    --hash=sha256:d3bf27478d4593f2df7daf5c59b616a543b8f9e2cc9235bef84d8e54862a4334 \
+    --hash=sha256:d65ae4223b0c351cb3b4596262b8d9773acc9ca94ef8ea9b5fe3ddfa07dd204f \
+    --hash=sha256:ea6cc5d87b033cf0aedfbc8f9549a908cae6c50ac31f1698188fa48a74524b54
