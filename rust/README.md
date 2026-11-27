@@ -23,7 +23,7 @@ codes.
 ## Install
 
 ```sh
-cargo install curly-message-lint@1.0.0-next.0
+cargo install curly-message-lint@1.0.0
 ```
 
 installs the command, and

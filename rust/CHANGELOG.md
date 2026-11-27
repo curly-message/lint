@@ -1,6 +1,6 @@
 # Changelog
 
-### 1.0.0 (Unreleased)
+## 1.0.0
 
 The first version: the linter for messages and catalogues of the Curly
 Message Format in Rust, as a library and as the `curly-lint` command.
