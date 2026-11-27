@@ -1,6 +1,6 @@
 # Changelog
 
-### 1.0.0 (Unreleased)
+## 1.0.0
 
 The first version: ESLint rules for messages of the Curly Message Format.
 
