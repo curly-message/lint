@@ -1,0 +1,245 @@
+name: Python build
+
+# The Python package's wheels, one built and tested on each platform it is
+# published for, and its sdist, built beside the first and tested by building
+# the command from it. The tests and the publish workflow both call it, so
+# what is published is built and tested as every pull request's build is.
+# Each wheel is built on the one stable Rust named below, raised by a pull
+# request; the sdist is tested on the oldest Rust the crate states.
+on:
+  workflow_call:
+    inputs:
+      artifacts:
+        description: 'What each artifact is named for: <artifacts>-<target>'
+        type: string
+        default: build
+      patch:
+        description: 'A release bump to apply before building, as git diff --binary in base64'
+        type: string
+        default: ''
+      changes:
+        description: 'The files that bump changes, as git status --porcelain lists them'
+        type: string
+        default: ''
+      benchmark:
+        description: 'Write BENCH.md beside the sdist, measured on the build'
+        type: boolean
+        default: false
+    outputs:
+      digests:
+        description: 'Each file built, as <sha256>:<name>, comma-separated'
+        value: ${{ format('{0},{1},{2},{3},{4},{5},{6},{7}', jobs.Build.outputs.digests_x86_64_unknown_linux_gnu, jobs.Build.outputs.digests_aarch64_unknown_linux_gnu, jobs.Build.outputs.digests_x86_64_unknown_linux_musl, jobs.Build.outputs.digests_aarch64_unknown_linux_musl, jobs.Build.outputs.digests_x86_64_apple_darwin, jobs.Build.outputs.digests_aarch64_apple_darwin, jobs.Build.outputs.digests_x86_64_pc_windows_msvc, jobs.Build.outputs.digests_aarch64_pc_windows_msvc) }}
+
+permissions:
+  contents: read
+
+env:
+  RUST: 1.100.0
+
+jobs:
+  Build:
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { target: x86_64-unknown-linux-gnu, runner: ubuntu-latest, tag: manylinux2014_x86_64.manylinux_2_17_x86_64, args: --zig --compatibility manylinux_2_17, sdist: true }
+          - { target: aarch64-unknown-linux-gnu, runner: ubuntu-24.04-arm, tag: manylinux2014_aarch64.manylinux_2_17_aarch64, args: --zig --compatibility manylinux_2_17 }
+          - { target: x86_64-unknown-linux-musl, runner: ubuntu-latest, tag: musllinux_1_2_x86_64, args: --compatibility musllinux_1_2 }
+          - { target: aarch64-unknown-linux-musl, runner: ubuntu-24.04-arm, tag: musllinux_1_2_aarch64, args: --compatibility musllinux_1_2 }
+          - { target: x86_64-apple-darwin, runner: macos-15-intel, tag: macosx_10_12_x86_64 }
+          - { target: aarch64-apple-darwin, runner: macos-latest, tag: macosx_11_0_arm64 }
+          - { target: x86_64-pc-windows-msvc, runner: windows-latest, tag: win_amd64 }
+          - { target: aarch64-pc-windows-msvc, runner: windows-11-arm, tag: win_arm64 }
+    defaults:
+      run:
+        shell: bash
+        working-directory: python
+    # Each leg sets the output named for its target alone: a matrix's legs
+    # share the job's outputs, and one name would keep the last leg's.
+    outputs:
+      digests_x86_64_unknown_linux_gnu: ${{ steps.pack.outputs.digests_x86_64_unknown_linux_gnu }}
+      digests_aarch64_unknown_linux_gnu: ${{ steps.pack.outputs.digests_aarch64_unknown_linux_gnu }}
+      digests_x86_64_unknown_linux_musl: ${{ steps.pack.outputs.digests_x86_64_unknown_linux_musl }}
+      digests_aarch64_unknown_linux_musl: ${{ steps.pack.outputs.digests_aarch64_unknown_linux_musl }}
+      digests_x86_64_apple_darwin: ${{ steps.pack.outputs.digests_x86_64_apple_darwin }}
+      digests_aarch64_apple_darwin: ${{ steps.pack.outputs.digests_aarch64_apple_darwin }}
+      digests_x86_64_pc_windows_msvc: ${{ steps.pack.outputs.digests_x86_64_pc_windows_msvc }}
+      digests_aarch64_pc_windows_msvc: ${{ steps.pack.outputs.digests_aarch64_pc_windows_msvc }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # From the root: run in a subdirectory, git apply drops every path
+      # outside it without a word.
+      - name: Apply the bump
+        if: inputs.patch != ''
+        working-directory: .
+        env:
+          PATCH: ${{ inputs.patch }}
+          CHANGES: ${{ inputs.changes }}
+        run: |
+          base64 -d <<< "$PATCH" | git apply
+          changes=$(git status --porcelain | cut -c4- | paste -sd ' ' -)
+          [ "$changes" = "$CHANGES" ] || { echo "::error::The bump changes '$changes' here and changed '$CHANGES' where it was made."; exit 1; }
+
+      - name: Setup Rust
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          rustup toolchain install "$RUST" --profile minimal --target "$TARGET" --no-self-update
+          rustup default "$RUST"
+
+      # No cache is restored: what this job builds may be published, so
+      # nothing another run wrote reaches it.
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
+
+      - name: Setup Node
+        if: matrix.sdist && inputs.benchmark
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # maturin, and zig on Linux, at the versions and hashes the constraints
+      # pin.
+      - name: Install the build tools
+        run: |
+          uv venv --quiet "$RUNNER_TEMP/build"
+          uv pip install --quiet --python "$RUNNER_TEMP/build" --require-hashes -r build-constraints.txt
+
+      - name: Build
+        env:
+          TARGET: ${{ matrix.target }}
+          ARGS: ${{ matrix.args }}
+          SDIST: ${{ matrix.sdist }}
+        run: |
+          [ "$RUNNER_OS" = Windows ] && python="$RUNNER_TEMP/build/Scripts/python.exe" || python="$RUNNER_TEMP/build/bin/python"
+          "$python" build.py build --release --locked --target "$TARGET" $ARGS -o dist
+          if [ "$SDIST" = true ]; then "$python" build.py sdist -o dist; fi
+
+      - name: Check the build
+        env:
+          TAG: ${{ matrix.tag }}
+        run: uv run --no-project --quiet python -I tests/dist.py dist "$TAG"
+
+      # Every case of `fixtures/` and the rest of the crate's suite, on cargo's
+      # build of the source and target the wheel holds.
+      - name: Test the crate
+        working-directory: rust
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo test -p curly-message-lint --locked --target "$TARGET"
+
+      # `cli.rs` against the command the wheel installs, as a project gets it:
+      # through pip, into an environment of its own.
+      - name: Test the installed command
+        if: ${{ !contains(matrix.target, 'musl') }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          uv venv --quiet --seed "$RUNNER_TEMP/shipped"
+          if [ "$RUNNER_OS" = Windows ]; then
+            bin="$RUNNER_TEMP/shipped/Scripts"
+            command="$bin/curly-lint.exe"
+          else
+            bin="$RUNNER_TEMP/shipped/bin"
+            command="$bin/curly-lint"
+          fi
+          "$bin/python" -m pip install --quiet --no-index --no-deps dist/*.whl
+          cd ../rust
+          CURLY_LINT_BIN="$command" cargo test -p curly-message-lint --locked --target "$TARGET" --test cli
+
+      # A musllinux wheel installs into a musl Python alone, so `cli.rs`, built
+      # static, runs in Alpine against the command Alpine's pip installs. The
+      # checkout is mounted where it is here, since the test holds its paths.
+      - name: Test the installed command on Alpine
+        if: contains(matrix.target, 'musl')
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          cd ../rust
+          cli=$(cargo test -p curly-message-lint --locked --target "$TARGET" --test cli --no-run --message-format=json | jq -r 'select(.reason == "compiler-artifact" and .target.name == "cli" and .executable != null) | .executable')
+          [ -n "$cli" ] || { echo "::error::cargo built no cli test for $TARGET."; exit 1; }
+          docker run --rm -v "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE" -w "$GITHUB_WORKSPACE/python" -e CLI="$cli" alpine:3.24 sh -ec '
+            apk add --quiet --no-cache python3
+            python3 -m venv /shipped
+            /shipped/bin/python -m pip install --quiet --no-index --no-deps dist/*.whl
+            cd ../rust
+            CURLY_LINT_BIN=/shipped/bin/curly-lint "$CLI"'
+
+      # Each release records what its build costs, measured on the very wheel
+      # and sdist it publishes; a row that fails stops the release here.
+      - name: Benchmark
+        if: matrix.sdist && inputs.benchmark
+        run: |
+          sh bench/prepare.sh dist
+          node bench/harness.mjs > dist/BENCH.md
+
+      - name: Record the digests
+        id: pack
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          digests=$(uv run --no-project --quiet python -I -c '
+          import hashlib, pathlib, sys
+          files = sorted(path for pattern in ("*.whl", "*.tar.gz") for path in pathlib.Path(sys.argv[1]).glob(pattern))
+          sys.stdout.write(",".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}:{path.name}" for path in files))' dist)
+          echo "digests_${TARGET//-/_}=$digests" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the build
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifacts }}-${{ matrix.target }}
+          path: python/dist/
+          if-no-files-found: error
+
+  # The command built from the sdist, as an installer builds it on a platform
+  # no wheel is published for, on the oldest Rust the crate states.
+  Sdist:
+    needs: Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: python
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install 1.88 --profile minimal --no-self-update
+          rustup default 1.88
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          enable-cache: false
+
+      - name: Download the sdist
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifacts }}-x86_64-unknown-linux-gnu
+          path: ${{ runner.temp }}/build
+
+      # pip builds the sdist with the maturin its build-system names, in an
+      # isolated environment, as an installer with no wheel to take does.
+      - name: Build and install from the sdist
+        run: |
+          uv venv --quiet --seed "$RUNNER_TEMP/shipped"
+          "$RUNNER_TEMP/shipped/bin/python" -m pip install --quiet --no-binary curly-message-lint "$RUNNER_TEMP"/build/*.tar.gz
+
+      - name: Test the installed command
+        working-directory: rust
+        run: CURLY_LINT_BIN="$RUNNER_TEMP/shipped/bin/curly-lint" cargo test -p curly-message-lint --locked --test cli

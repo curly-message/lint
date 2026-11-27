@@ -7,7 +7,7 @@ name: Re-run unplaced jobs
 # runs nothing of the run it reads.
 on:
   workflow_run:
-    workflows: [Tests]
+    workflows: [Tests, Python tests]
     types: [completed]
 
 permissions:

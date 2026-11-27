@@ -1,0 +1,33 @@
+name: Python tests
+
+# The Python package, built and tested on each platform it is published for
+# by `build.yml`. Filtered by path, since nine builds are more than a change
+# to neither the package nor the crate it carries should wait on; so it is
+# never a required check. The publish workflow calls it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - python/**
+      - rust/**
+      - fixtures/**
+      - .github/workflows/build.yml
+      - .github/workflows/tests-python.yml
+  pull_request:
+    paths:
+      - python/**
+      - rust/**
+      - fixtures/**
+      - .github/workflows/build.yml
+      - .github/workflows/tests-python.yml
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  Build:
+    uses: ./.github/workflows/build.yml
+    with:
+      artifacts: tested
