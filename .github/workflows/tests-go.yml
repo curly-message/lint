@@ -1,0 +1,37 @@
+name: Go tests
+
+# The Go module, packed and tested on each platform it holds a command for
+# by `build-go.yml`, over the wheels `build.yml` builds there. Filtered by
+# path, since it builds each platform's command and installs the launcher on
+# each twice; so it is never a required check. The publish workflow calls it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - go/**
+      - rust/**
+      - python/**
+      - fixtures/**
+      - .github/workflows/build.yml
+      - .github/workflows/build-go.yml
+      - .github/workflows/tests-go.yml
+  pull_request:
+    paths:
+      - go/**
+      - rust/**
+      - python/**
+      - fixtures/**
+      - .github/workflows/build.yml
+      - .github/workflows/build-go.yml
+      - .github/workflows/tests-go.yml
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  Build:
+    uses: ./.github/workflows/build-go.yml
+    with:
+      artifacts: tested

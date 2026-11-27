@@ -1,0 +1,286 @@
+name: Go build
+
+# The Go module as a release serves it: the native command of each platform,
+# taken out of the wheel `build.yml` builds and tests there, packed with the
+# launcher of `go/` by `go/pack.sh`, then installed by the go command and
+# tested on each platform, as a project that requires the module gets it. The
+# tests and the publish workflow both call it, so what is published is built
+# and tested as every pull request's build is.
+on:
+  workflow_call:
+    inputs:
+      artifacts:
+        description: 'What each artifact is named for: <artifacts>-<target>, and <artifacts>-module'
+        type: string
+        default: build
+      patch:
+        description: 'A release bump to apply before building, as git diff --binary in base64'
+        type: string
+        default: ''
+      changes:
+        description: 'The files that bump changes, as git status --porcelain lists them'
+        type: string
+        default: ''
+      benchmark:
+        description: 'Write BENCH.md beside the module, measured on it'
+        type: boolean
+        default: false
+    outputs:
+      digests:
+        description: 'Each native command, as <sha256>:<name>, comma-separated'
+        value: ${{ jobs.Module.outputs.digests }}
+      tree:
+        description: 'The git tree the module is, which the mirror holds at its tag'
+        value: ${{ jobs.Module.outputs.tree }}
+      sum:
+        description: 'The h1: sum of the module, as the checksum database records it'
+        value: ${{ jobs.Module.outputs.sum }}
+
+permissions:
+  contents: read
+
+env:
+  MODULE: github.com/curly-message/lint-go
+
+jobs:
+  # A wheel per platform, each holding the command built and tested there. The
+  # module takes six of the eight: for Linux the ones linked statically
+  # against musl, which run beside any C library.
+  Commands:
+    uses: ./.github/workflows/build.yml
+    with:
+      artifacts: ${{ inputs.artifacts }}
+      patch: ${{ inputs.patch }}
+      changes: ${{ inputs.changes }}
+
+  Module:
+    needs: Commands
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: go
+    outputs:
+      digests: ${{ steps.commands.outputs.digests }}
+      tree: ${{ steps.pack.outputs.tree }}
+      sum: ${{ steps.pack.outputs.sum }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # From the root: run in a subdirectory, git apply drops every path
+      # outside it without a word.
+      - name: Apply the bump
+        if: inputs.patch != ''
+        working-directory: .
+        env:
+          PATCH: ${{ inputs.patch }}
+          CHANGES: ${{ inputs.changes }}
+        run: |
+          base64 -d <<< "$PATCH" | git apply
+          changes=$(git status --porcelain | cut -c4- | paste -sd ' ' -)
+          [ "$changes" = "$CHANGES" ] || { echo "::error::The bump changes '$changes' here and changed '$CHANGES' where it was made."; exit 1; }
+
+      # The oldest Go the module states: what packs and vets here is what
+      # every newer go command reads the same.
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go/go.mod
+          cache: false
+
+      - name: Setup Node
+        if: inputs.benchmark
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Each wheel in a directory named for its target, outside the checkout.
+      - name: Download the wheels
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ inputs.artifacts }}-*
+          path: ${{ runner.temp }}/wheels
+
+      # A wheel holds the command as its one script. Each is read out of the
+      # one wheel its leg uploaded, under the name the launcher embeds it by.
+      - name: Take the commands
+        id: commands
+        env:
+          ARTIFACTS: ${{ inputs.artifacts }}
+        run: |
+          mkdir "$RUNNER_TEMP/commands"
+          while read -r target name; do
+            wheels=("$RUNNER_TEMP/wheels/$ARTIFACTS-$target"/*.whl)
+            [ "${#wheels[@]}" = 1 ] && [ -f "${wheels[0]}" ] || { echo "::error::The build for $target holds ${#wheels[@]} wheels, not one."; exit 1; }
+            case "$name" in *.exe) script=curly-lint.exe ;; *) script=curly-lint ;; esac
+            held=$(unzip -Z1 "${wheels[0]}" | grep -cE "^[^/]+\.data/scripts/$script$") || held=0
+            [ "$held" = 1 ] || { echo "::error::The wheel for $target holds $held commands, not one."; exit 1; }
+            unzip -p "${wheels[0]}" "*.data/scripts/$script" > "$RUNNER_TEMP/commands/$name"
+            [ -s "$RUNNER_TEMP/commands/$name" ] || { echo "::error::The command for $target is empty."; exit 1; }
+          done <<'TARGETS'
+          x86_64-unknown-linux-musl curly-lint-linux-amd64
+          aarch64-unknown-linux-musl curly-lint-linux-arm64
+          x86_64-apple-darwin curly-lint-darwin-amd64
+          aarch64-apple-darwin curly-lint-darwin-arm64
+          x86_64-pc-windows-msvc curly-lint-windows-amd64.exe
+          aarch64-pc-windows-msvc curly-lint-windows-arm64.exe
+          TARGETS
+          digests=$(cd "$RUNNER_TEMP/commands" && sha256sum -- * | sed -E 's/^([0-9a-f]+) [ *](.*)$/\1:\2/' | paste -sd ',' -)
+          echo "digests=$digests" >> "$GITHUB_OUTPUT"
+
+      # The module, fetched by the go command from a git repository of the
+      # tree, as a proxy fetches it from the mirror: the zip and its sum are
+      # the ones a release of this tree is recorded with.
+      - name: Pack
+        id: pack
+        run: |
+          sh pack.sh "$RUNNER_TEMP/commands" "$RUNNER_TEMP/module"
+          {
+            echo "tree=$(git -C "$RUNNER_TEMP/module/tree" rev-parse 'HEAD^{tree}')"
+            echo "sum=$(jq -r .Sum "$RUNNER_TEMP/module/module.json")"
+          } >> "$GITHUB_OUTPUT"
+
+      # The formatting and lint contract, on the tree a release serves, where
+      # every platform's command is there to embed: each platform the module
+      # names, and two it does not, which build the launcher that says so.
+      - name: Lint
+        working-directory: ${{ runner.temp }}/module/tree
+        env:
+          GOWORK: 'off'
+        run: |
+          unformatted=$(gofmt -l .)
+          [ -z "$unformatted" ] || { echo "::error::gofmt would rewrite: $unformatted"; exit 1; }
+          if LC_ALL=C grep -rnP '[^\x00-\x7F]' --include='*.go' .; then echo "::error::A .go file holds a character outside ASCII."; exit 1; fi
+          go mod tidy -diff
+          for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64 freebsd/amd64 android/arm64; do
+            GOOS=${platform%/*} GOARCH=${platform#*/} go vet ./...
+          done
+          for platform in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            embedded=$(GOOS=${platform%/*} GOARCH=${platform#*/} go list -f '{{join .EmbedFiles " "}}' ./cmd/curly-lint)
+            case "$platform" in windows/*) ending=.exe ;; *) ending= ;; esac
+            [ "$embedded" = "bin/curly-lint-${platform%/*}-${platform#*/}$ending" ] || { echo "::error::Built for $platform, the launcher embeds '$embedded'."; exit 1; }
+          done
+
+      # Each release records what it costs, measured on the very module it
+      # serves; a row that fails stops the release here.
+      - name: Benchmark
+        if: inputs.benchmark
+        run: |
+          sh bench/prepare.sh "$RUNNER_TEMP/module/proxy"
+          node bench/harness.mjs > "$RUNNER_TEMP/module/BENCH.md"
+
+      # The commands, the proxy the platforms install from, and what the go
+      # command answered; the tree is made again from these where it is used.
+      - name: Gather the module
+        run: |
+          rm -rf "$RUNNER_TEMP/module/tree"
+          cp -R "$RUNNER_TEMP/commands" "$RUNNER_TEMP/module/commands"
+
+      - name: Upload the module
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifacts }}-module
+          path: ${{ runner.temp }}/module/
+          if-no-files-found: error
+
+  # The launcher as a project gets it: installed by the go command from a
+  # proxy that serves the module, by the oldest Go the module states and by
+  # the newest, on each platform it holds a command for.
+  Shipped:
+    needs: Module
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-15-intel, macos-latest, windows-latest, windows-11-arm]
+        go: ['1.24', stable]
+    defaults:
+      run:
+        shell: bash
+    env:
+      GOTOOLCHAIN: local
+      GOWORK: 'off'
+      GONOSUMDB: github.com/curly-message/lint-go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+
+      - name: Setup Rust
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Download the module
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifacts }}-module
+          path: ${{ runner.temp }}/module
+
+      # From the proxy alone and into a module cache of its own, which the go
+      # command leaves read-only, as a project's is.
+      - name: Install the launcher
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then temp=$(cygpath -m "$RUNNER_TEMP"); proxy="file:///$temp/module/proxy"; else temp=$RUNNER_TEMP; proxy="file://$temp/module/proxy"; fi
+          version=$(tr -d '\r' < "$temp/module/proxy/$MODULE/@v/list")
+          {
+            echo "GOPROXY=$proxy"
+            echo "GOMODCACHE=$temp/modcache"
+            echo "GOBIN=$temp/bin"
+            echo "VERSION=$version"
+            echo "CURLY_LINT_CACHE_DIR=$temp/kept"
+            echo "LAUNCHER=$temp/bin/curly-lint$(go env GOEXE)"
+          } >> "$GITHUB_ENV"
+          GOPROXY=$proxy GOMODCACHE=$temp/modcache GOBIN=$temp/bin go install "$MODULE/cmd/curly-lint@$version"
+
+      # The launcher's own tests, from where the go command keeps the module:
+      # the test binary is the launcher over this platform's command.
+      - name: Test the launcher
+        run: |
+          cd "$GOMODCACHE/$MODULE@$VERSION"
+          go vet ./...
+          go test -count=1 ./...
+
+      # `cli.rs` against the installed launcher, which is to be the crate's
+      # command in every argument, stream and exit status.
+      - name: Test the installed command
+        working-directory: rust
+        run: CURLY_LINT_BIN="$LAUNCHER" cargo test -p curly-message-lint --locked --test cli
+
+      # Once more in the user's own cache directory, where a project that
+      # sets nothing keeps the command.
+      - name: Run it from the user's cache
+        env:
+          CURLY_LINT_CACHE_DIR: ''
+        run: |
+          "$LAUNCHER" --help > "$RUNNER_TEMP/help.txt"
+          grep -q '^Usage: curly-lint ' "$RUNNER_TEMP/help.txt"
+
+      # The runner's C library is glibc and Alpine's is musl: a command for
+      # Linux that needed either at run time fails on one of the two. The
+      # launcher itself is Go's own static program.
+      - name: Run it on Alpine
+        if: runner.os == 'Linux'
+        run: |
+          docker run --rm -v "$RUNNER_TEMP/bin:/shipped:ro" alpine:3.24 sh -ec '
+            /shipped/curly-lint --help | grep -q "^Usage: curly-lint "
+            printf "{\"greeting\":\"Hello, {{name\"}" > /tmp/catalogue.json
+            cd /tmp
+            status=0
+            /shipped/curly-lint --locale en catalogue.json > report.txt || status=$?
+            [ "$status" = 1 ]
+            grep -q unclosed-placeholder report.txt'

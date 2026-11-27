@@ -30,6 +30,7 @@ JavaScript package, which runs the crate compiled to WebAssembly.
 | `eslint-plugin/` | `@curly-message/eslint-plugin`: the rules a single message decides, as ESLint rules |
 | `rust/` | `curly-message-lint`: the rules, the catalogue reader and the `curly-lint` command; `rust/wasm/`, the binding the library is built from |
 | `python/` | `curly-message-lint` on PyPI: the crate's `curly-lint` command, a native program in a wheel per platform |
+| `go/` | `github.com/curly-message/lint-go`: the crate's `curly-lint` command for the go command, a launcher in Go that carries the native program of its platform; served from `curly-message/lint-go` |
 
 - **Workspaces of one root**, because the plugin depends on the library and
   both change together: one lockfile at the root, one `npm ci`, each
@@ -53,11 +54,26 @@ JavaScript package, which runs the crate compiled to WebAssembly.
   crate's manifest, and two scripts of the standard library alone,
   `build.py`, which runs maturin, and `tests/dist.py`, which checks what it
   built; the package ships no Python. Run its commands from `python/`.
+- **`go/` is a Go module of its own**, outside all three: the launcher,
+  `cmd/curly-lint/`, in the standard library alone, and `pack.sh`, which
+  packs it with the native commands as a release serves it. The commands
+  are no file of this repository: the launcher embeds them from
+  `cmd/curly-lint/bin/`, which is ignored here and which only the mirror
+  holds, so the package builds here once `bench/prepare.sh` has put this
+  machine's there. Run its commands from `go/`.
+- **The Go module is served from `curly-message/lint-go`**, which the go
+  command reads and only `publish-go.yml` writes to: a version there is
+  `go/` as its tag `go-vX.Y.Z` holds it here, but for `BENCH.md`, with the
+  six commands built from that tag, tagged `vX.Y.Z`. A change to the package
+  is a change to `go/` here. The module's path names no major version, so
+  its version line stays below `v2`, and a version the module proxy has
+  served is never moved or deleted: a bad one is retracted by the next.
 - **Release tags are namespaced by directory** — `lint-v1.0.0`,
-  `eslint-plugin-v1.0.0`, `rust-v1.0.0`, `python-v1.0.0` — and the publish
-  workflows cut them (`.github/workflows/publish.yml` for the workspaces,
-  `publish-rust.yml` for the crate, `publish-python.yml` for the Python
-  package; the README's Releasing section says what they do).
+  `eslint-plugin-v1.0.0`, `rust-v1.0.0`, `python-v1.0.0`, `go-v1.0.0` — and
+  the publish workflows cut them (`.github/workflows/publish.yml` for the
+  workspaces, `publish-rust.yml` for the crate, `publish-python.yml` for the
+  Python package, `publish-go.yml` for the Go module, which tags the mirror
+  `v1.0.0` too; the README's Releasing section says what they do).
 - **The lockfile is written with npm 11** (`npx npm@11 install`). npm 10 fails
   to resolve the workspaces' peer dependencies, though it installs from the
   lockfile (`npm ci`) as CI's Node 22 does.
@@ -98,7 +114,7 @@ Tech stack of `rust/` — **ground truth, do not assume otherwise**:
 | Lint | rustfmt and Clippy, at the lints `Cargo.toml` denies: a panic, an index, a slice of a `str`, unchecked arithmetic, a character outside ASCII in a literal, a write to the standard streams |
 | Features | `cldr`, default: the plural rules of the Unicode CLDR as data in the crate (`cldr/`, under the Unicode License v3), which the binary requires |
 | Dependencies | `curly-message-parser`, and `unicode-properties` for the characters a report shows by code point; `serde_json`, `sha2` and `libtest-mimic` for the tests alone |
-| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml`, `publish-rust.yml`; a change under `rust/` runs the npm jobs and benchmarks too, which build it, and `tests-python.yml` and the `python` leg of `bench.yml`, which ship it |
+| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml`, `publish-rust.yml`; a change under `rust/` runs the npm jobs and benchmarks too, which build it, and `tests-python.yml`, `tests-go.yml` and the `python` and `go` legs of `bench.yml`, which ship it |
 
 Tech stack of `python/` — **ground truth, do not assume otherwise**:
 
@@ -110,6 +126,20 @@ Tech stack of `python/` — **ground truth, do not assume otherwise**:
 | Tests | on each platform's leg: `tests/dist.py` on what the build wrote (a Windows command that imports a C runtime DLL fails it), the crate's `cargo test` for that target, and `rust/tests/cli.rs` against the command the wheel installs through pip (on Alpine for musl); the sdist built on Rust 1.88 and held to `cli.rs` |
 | Licenses | `LICENSE` and `THIRD-PARTY-NOTICES.md` in every wheel, the notices held by `tests/dist.py` to the SBOM maturin writes: a crate the binary gains is a row there |
 | CI | `tests-python.yml` (calls `build.yml`, filtered by path, so never a required check), the `python` leg of `bench.yml`, `publish-python.yml` |
+
+Tech stack of `go/` — **ground truth, do not assume otherwise**:
+
+| | |
+|---|---|
+| Module | `github.com/curly-message/lint-go`, one package, `cmd/curly-lint`, the `curly-lint` command alone, no Go API; unreleased. Its own version line, below `v2`; the README and the changelog name the crate release each version carries |
+| Language | Go 1.24+, the first with a `tool` line in `go.mod`; the standard library alone |
+| Build | none here: `pack.sh` puts the commands beside the launcher in a git repository of its own and has the go command fetch it, as the proxy fetches the mirror, which writes the module's zip and its `h1:` sum; the commands are those of the wheels `build.yml` builds, for Linux the ones linked statically against musl |
+| Platforms | `linux`, `darwin` and `windows` on `amd64` and `arm64`; built for any other, Android and iOS among them, the launcher holds no command, says so and exits 2 |
+| Tests | `go test`, in `build-go.yml`, on each platform and on Go 1.24 and stable, of the module as the go command installs it from a proxy of the packed tree: the launcher's own tests from the module cache, `rust/tests/cli.rs` against the installed launcher, and on Linux a run in Alpine beside the runner's glibc |
+| Lint | `gofmt`, `go vet` for each platform and two the module holds no command for, `go mod tidy -diff`, ASCII-only `.go`, all run by `build-go.yml`'s Module job on the packed tree |
+| Runtime dependencies | none: the module requires no module |
+| Licenses | `LICENSE`, a copy of the root's, and `THIRD-PARTY-NOTICES.md` in the module, both held by `tests.yml`: the notices to the rows and the texts of the Python package's, so a crate the binary gains is a row in both |
+| CI | `tests-go.yml` (calls `build-go.yml`, which calls `build.yml`; filtered by path, so never a required check), the `go` leg of `bench.yml`, `publish-go.yml` |
 
 Commands, run from the root:
 
@@ -177,6 +207,17 @@ The plugin is `eslint-plugin/src/index.ts`: the rules a single message
 decides, with or without its locale. The rules that compare locales stay the
 command's, since ESLint hands a rule one file.
 
+Commands, run from `go/`:
+
+| Command | What it does |
+|---------|--------------|
+| `sh bench/prepare.sh && node bench/harness.mjs` | build the crate's command for this machine into `cmd/curly-lint/bin/`, pack the module with it, install the launcher from that into `bench/dist/`, then the benchmark (`bench/rows.mjs`) |
+| `node bench/harness.mjs --compare <dir>` | the same, beside the package prepared at `<dir>` — what `bench.yml` runs on a PR |
+| `go test ./...` | the launcher's tests, over the command `bench/prepare.sh` built |
+| `gofmt -l .`, `go vet ./...`, `go mod tidy -diff` | the formatting and lint contract (`gofmt -w .` fixes the first) |
+| `sh pack.sh <commands> <out>` | the module as a release serves it, with the commands `<commands>` holds: its tree, a proxy of it for `GOPROXY=file://`, and its `h1:` sum |
+| `CURLY_LINT_BIN=<installed curly-lint> cargo test -p curly-message-lint --locked --test cli`, from `rust/` | `cli.rs` against an installed launcher |
+
 `fixtures/` at the root is the linter's contract as data, for every
 implementation: JSON cases of a message, a list of entries or a catalogue
 file's text, each with its findings, and the plural rules a case is read with
@@ -186,10 +227,11 @@ in place of the host's; `fixtures/schema.json` is their schema and
 Each workspace's `bench/rows.mjs` lists the rows of its benchmark, each read
 off the build. `bench/harness.mjs` at the root measures them for both,
 `bench/check/` beside it holds the rows it is checked on, and both are the same
-in every repository of the family. `rust/bench/` and `python/bench/` hold
-their own copies of both, which `tests.yml` holds to the root's, and rows
-that read a release build: the crate's over a child process, and the Python
-package's wheel, sdist and installed command.
+in every repository of the family. `rust/bench/`, `python/bench/` and
+`go/bench/` hold their own copies of both, which `tests.yml` holds to the
+root's, and rows that read a release build: the crate's over a child
+process, the Python package's wheel, sdist and installed command, and the Go
+module's zip and installed launcher.
 
 ## The format decides, not the linter
 
@@ -290,6 +332,10 @@ editors on every keystroke.
   lists what the native command holds, the CLDR's data, the Rust standard
   library and what each platform links in among it, and ships in every
   wheel.
+- `go/README.md` is the page pkg.go.dev shows and names, with
+  `go/CHANGELOG.md`, the crate release the module carries;
+  `go/THIRD-PARTY-NOTICES.md` lists what the six commands hold, as the
+  Python package's does of the same binaries, and the module holds it.
 - A finding's message is English, says what is wrong and what happens instead,
   and quotes what it is about in backticks.
 

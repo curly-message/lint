@@ -19,6 +19,7 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 | [`eslint-plugin/`](./eslint-plugin) | `@curly-message/eslint-plugin` | The rules a single message decides, as ESLint rules, for JSON and for messages in JavaScript and TypeScript. |
 | [`rust/`](./rust) | `curly-message-lint` | The rules, the catalogue reader and the `curly-lint` command in Rust: a crate and a native program, and the code the npm packages run. |
 | [`python/`](./python) | `curly-message-lint` on PyPI | The crate's `curly-lint` command as a native program, a wheel for each platform it is built for, for projects that install their tools from PyPI. |
+| [`go/`](./go) | `github.com/curly-message/lint-go` | The crate's `curly-lint` command for projects that install their tools with the go command: a launcher in Go that carries the native program of each platform it is built for, served from [`curly-message/lint-go`](https://github.com/curly-message/lint-go). |
 
 The library's README lists every rule. The command line runs all of them,
 those that compare one locale with another included. The plugin runs the ones a
@@ -49,8 +50,8 @@ which posts a table per workspace on the PR (a PR from a fork finds it in the
 job's summary). A count that grew, a row gone missing or changing kind, or a
 row that fails on the base fails the check unless the PR carries the
 `bench-accepted` label; adding or removing the label runs it again. The
-crate and the Python package are measured the same way, by the commands their
-READMEs name.
+crate, the Python package and the Go module are measured the same way, by
+the commands their READMEs name.
 
 ## Releasing
 
@@ -179,6 +180,62 @@ PyPI holds no token: the workflow is the project's
 owner `curly-message`, repository `lint`, workflow `publish-python.yml`,
 environment `release`), registered for the project `curly-message-lint` before
 its first version, `1.0.0rc0`, which the workflow published.
+
+### The Go module
+
+The go command reads a module from a repository's tree at a tag, and builds
+it with no step of the module's own, so the native commands have to be files
+of that tree. They are no files of this repository, which holds source: the
+module is served from
+[`curly-message/lint-go`](https://github.com/curly-message/lint-go), a
+repository that only the **Go publish** workflow
+(`.github/workflows/publish-go.yml`, started by hand with the kind of release)
+writes to. A change to the module is a pull request to `go/` here.
+
+The workflow reads `go/CHANGELOG.md`'s pending section and the release types
+as the others do, and keeps the version in `go/package.json`, which nothing
+publishes. The go command has no dist-tags: `next` cuts a prerelease
+(`v1.1.0-next.0`), which the go command takes when asked for it by its
+version, and as `latest` only while the module has no stable version. The module's path names no major version, so the workflow refuses a
+version of `2.0.0` or more. As for the Python package, it refuses a release
+while the crate on `main` is not the crate's newest release of its kind, or
+while `go/README.md` and the changelog's pending section do not name that
+release. It then runs **Go build** (`.github/workflows/build-go.yml`), which
+runs **Python build** for the command of each platform, built and tested
+there, takes six of them out of their wheels (for Linux the ones linked
+statically against musl), and packs them with the launcher by `go/pack.sh`:
+the go command fetches the module from a git repository of the tree, as the
+module proxy fetches it from the mirror, which gives the zip a release
+serves and its `h1:` sum. The build lints that tree, writes the benchmark of
+that module into `BENCH.md`, and on each platform, with Go 1.24 and with the
+newest, installs the launcher from a proxy of the packed module, runs its
+tests from the module cache and holds the installed command to `cli.rs`.
+
+The release job takes the six commands whose digests the build recorded,
+commits the version and `go/BENCH.md` and tags (`go-v1.1.0`) here, and makes
+the mirror's commit: `go/` as that tag holds it, but for `BENCH.md`, which
+was measured on the module and so is no file of it, with the six commands in
+`cmd/curly-lint/bin/`, on top of the mirror's `main`, tagged `v1.1.0`. It
+pushes neither unless that commit's tree is the one the build packed, tested
+and summed. It pushes this repository first, then the mirror, and then asks
+`proxy.golang.org` for the version, with the checksum database on, until it
+is served, and fails where the sum is not the build's. It publishes a GitHub
+release in both repositories, carrying the changelog section, the module's
+sum and the SHA-256 of each command, never marked as this repository's
+latest. It runs in the same three jobs, with the same `release` environment,
+and the App, installed on the mirror too, is what writes to it: no registry
+holds a credential, and nothing is registered anywhere, since the first
+fetch of a version through the proxy is what records it.
+
+A release that stops once its tag exists is finished by re-running its
+failed jobs while the build's artifact is kept, which builds nothing again:
+the job finds each tag holding the tree it would push and pushes what is
+missing. Re-running all jobs does not finish it, since a new build measures
+another `BENCH.md` than the tag holds, and may write other commands. One that stops before its tag exists is
+dispatched again. A version the proxy has served stays served, and its sum
+stays in the checksum database for good: a tag of the mirror is never moved
+or deleted, and a bad version is retracted by a `retract` line in the
+`go.mod` of the next.
 
 ## License
 
