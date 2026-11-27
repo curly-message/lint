@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "curly-message-lint"
-version = "1.0.0rc0"
+version = "1.0.0"
 description = "The curly-lint command, a linter for the Curly Message Format, as a native program."
 readme = "README.md"
 license = "MIT AND Unicode-3.0 AND Apache-2.0 WITH LLVM-exception"

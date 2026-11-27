@@ -1,6 +1,6 @@
 # Changelog
 
-### 1.0.0 (Unreleased)
+## 1.0.0
 
 The first version: the `curly-lint` command of the Rust crate
 `curly-message-lint` 1.0.0, published to PyPI as wheels for Linux (glibc and
