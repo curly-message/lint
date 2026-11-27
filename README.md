@@ -178,7 +178,7 @@ PyPI holds no token: the workflow is the project's
 [trusted publisher](https://docs.pypi.org/trusted-publishers/) (repository
 owner `curly-message`, repository `lint`, workflow `publish-python.yml`,
 environment `release`), registered for the project `curly-message-lint` before
-its first version, which the workflow publishes.
+its first version, `1.0.0rc0`, which the workflow published.
 
 ## License
 

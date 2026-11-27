@@ -104,7 +104,7 @@ Tech stack of `python/` — **ground truth, do not assume otherwise**:
 
 | | |
 |---|---|
-| Package | `curly-message-lint` on PyPI, the `curly-lint` command alone, no Python API; unreleased, its first version published by the workflow through the trusted publisher already registered. Its own version line; the README and the changelog name the crate release each version carries |
+| Package | `curly-message-lint` on PyPI, the `curly-lint` command alone, no Python API; released, `1.0.0`; the first version, the release candidate `1.0.0rc0`, was published by the workflow through a trusted publisher registered beforehand. Its own version line; the README and the changelog name the crate release each version carries |
 | Build | maturin (`bindings = "bin"`, the crate's manifest, `--locked`), hash-pinned with `ziglang` in `build-constraints.txt`, through `build.py`, which writes this machine's paths as names unless `RUSTFLAGS` or `CARGO_ENCODED_RUSTFLAGS` is set; the C runtime linked statically on Windows, by the `config` of `pyproject.toml`, which a build from the sdist reads too; one named stable Rust in `build.yml` |
 | Platforms | a wheel each for `manylinux_2_17` (zig) and `musllinux_1_2` on x86-64 and ARM64, `macosx_10_12_x86_64`, `macosx_11_0_arm64`, `win_amd64` and `win_arm64`, tagged `py3-none`, with no `requires-python`; the sdist, built by Rust 1.88 or newer |
 | Tests | on each platform's leg: `tests/dist.py` on what the build wrote (a Windows command that imports a C runtime DLL fails it), the crate's `cargo test` for that target, and `rust/tests/cli.rs` against the command the wheel installs through pip (on Alpine for musl); the sdist built on Rust 1.88 and held to `cli.rs` |
