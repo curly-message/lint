@@ -70,7 +70,7 @@ Tech stack — **ground truth, do not assume otherwise**:
 
 | | |
 |---|---|
-| Packages | `@curly-message/lint` and `@curly-message/eslint-plugin`, released as prereleases; the first version of each, `1.0.0-next.0`, was published by hand |
+| Packages | `@curly-message/lint` and `@curly-message/eslint-plugin`, released, `1.0.0`; the first version of each, the prerelease `1.0.0-next.0`, was published by hand |
 | Language | TypeScript, ESM only |
 | Package manager | npm 11, workspaces |
 | Build | tsup |
@@ -85,7 +85,7 @@ Tech stack of `rust/` — **ground truth, do not assume otherwise**:
 
 | | |
 |---|---|
-| Package | `curly-message-lint`, a library and the `curly-lint` binary, released as a prerelease; the first version, `1.0.0-next.0`, was published by hand |
+| Package | `curly-message-lint`, a library and the `curly-lint` binary, released, `1.0.0`; the first version, the prerelease `1.0.0-next.0`, was published by hand |
 | Language | Rust, edition 2024, no `unsafe`: the workspace forbids it, and `wasm/` alone denies it in its place, so that `wasm/src/abi.rs` can allow what an export and an import are written with |
 | Toolchains | Rust 1.88 and stable, on Linux, macOS and Windows; the library without `cldr` also builds for `wasm32-unknown-unknown` |
 | Tests | `cargo test`; the fixture runner through `libtest-mimic`, a case a test |

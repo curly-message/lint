@@ -17,7 +17,7 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 | --- | --- | --- |
 | [`lint/`](./lint) | `@curly-message/lint` | The rules, a library over them, and the `curly-lint` command for JSON catalogues: the crate compiled to WebAssembly, for Node, Bun and Deno. |
 | [`eslint-plugin/`](./eslint-plugin) | `@curly-message/eslint-plugin` | The rules a single message decides, as ESLint rules, for JSON and for messages in JavaScript and TypeScript. |
-| [`rust/`](./rust) | `curly-message-lint` | The rules, the catalogue reader and the `curly-lint` command in Rust: a crate and a native program, released as a prerelease, and the code the npm packages run. |
+| [`rust/`](./rust) | `curly-message-lint` | The rules, the catalogue reader and the `curly-lint` command in Rust: a crate and a native program, and the code the npm packages run. |
 
 The library's README lists every rule. The command line runs all of them,
 those that compare one locale with another included. The plugin runs the ones a
