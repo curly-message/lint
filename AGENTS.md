@@ -285,7 +285,9 @@ editors on every keystroke.
   `fixtures/schema.json`, read by a validator of the keywords the schema
   uses, and runs every case, converting the set's UTF-16 offsets to bytes at
   its edge. `rust/tests/command.rs` runs the command over files held in
-  memory, `rust/tests/cli.rs` through the built binary, and
+  memory, `rust/tests/cli.rs` through the built binary, or through the one
+  `CURLY_LINT_BIN` names by its path, as a package that ships it installs
+  it, and
   `rust/tests/library.rs` holds what data cannot state: the CLDR data's
   digests, random and large inputs that must not panic, and the README's
   table of rules and its version of Unicode. The tests in `rust/src/cldr.rs`
