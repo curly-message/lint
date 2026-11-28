@@ -1,6 +1,6 @@
 # Changelog
 
-### 1.0.1 (Unreleased)
+## 1.0.1
 
 The `curly-lint` command of the Rust crate `curly-message-lint` 1.0.0, as
 1.0.0 carries it.
