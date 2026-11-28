@@ -129,8 +129,9 @@ Linux or macOS with Go, git, Rust and Node, builds the command for that
 machine, packs the module with it as a release packs it with all six, has
 the go command install the launcher from that, and measures the size of the
 module's zip and of the launcher, the modules the launcher is built from,
-and three times of the installed command. `node bench/harness.mjs --compare
-<dir>` sets it beside the package prepared the same way at `<dir>`.
+and three times of the installed command.
+`node bench/harness.mjs --compare <dir>` sets it beside the package prepared
+the same way at `<dir>`.
 
 ## License
 
