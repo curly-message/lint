@@ -164,7 +164,7 @@ Tech stack of `php/` — **ground truth, do not assume otherwise**:
 
 | | |
 |---|---|
-| Package | `curly-message/lint` for Composer, the `curly-lint` command alone, no PHP API and nothing for an autoloader; unreleased. Its own version line, release candidates `X.Y.Z-RC.N`; the README and the changelog name the crate release each version carries |
+| Package | `curly-message/lint` for Composer, the `curly-lint` command alone, no PHP API and nothing for an autoloader; released, `1.0.0`; the first version, the release candidate `1.0.0-RC.0`, was cut by the workflow, and its mirror submitted to Packagist by hand while that run waited. Its own version line, release candidates `X.Y.Z-RC.N`; the README and the changelog name the crate release each version carries |
 | Language | PHP 8.2+, one file, `bin/curly-lint`, with `declare(strict_types=1)`; no extension |
 | Build | none here: `pack.sh` puts the commands beside the launcher in a git repository of its own, archives its tag as GitHub serves the mirror's to Composer, and has Composer install that archive from a Composer repository of the one version; the commands are those of the wheels `build.yml` builds, for Linux the ones linked statically against musl |
 | Platforms | Linux and macOS on x86-64 and ARM64, Windows on x86-64, each command named by what PHP reports there, `commands/curly-lint-<PHP_OS_FAMILY>-<php_uname('m')>`, `.exe` on Windows; on any other the launcher holds no command, says so and exits 2 |
