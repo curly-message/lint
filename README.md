@@ -20,6 +20,7 @@ locales/cs/common.json:3:17  error  `cs` puts 0.5, 1.5 and 2.5 in `many`, and th
 | [`rust/`](./rust) | `curly-message-lint` | The rules, the catalogue reader and the `curly-lint` command in Rust: a crate and a native program, and the code the npm packages run. |
 | [`python/`](./python) | `curly-message-lint` on PyPI | The crate's `curly-lint` command as a native program, a wheel for each platform it is built for, for projects that install their tools from PyPI. |
 | [`go/`](./go) | `github.com/curly-message/lint-go` | The crate's `curly-lint` command for projects that install their tools with the go command: a launcher in Go that carries the native program of each platform it is built for, served from [`curly-message/lint-go`](https://github.com/curly-message/lint-go). |
+| [`php/`](./php) | `curly-message/lint` for Composer | The crate's `curly-lint` command for projects that install their tools with Composer: a launcher in PHP that runs the native program of the platform, of those it is built for, served from [`curly-message/lint-php`](https://github.com/curly-message/lint-php). |
 
 The library's README lists every rule. The command line runs all of them,
 those that compare one locale with another included. The plugin runs the ones a
@@ -50,8 +51,8 @@ which posts a table per workspace on the PR (a PR from a fork finds it in the
 job's summary). A count that grew, a row gone missing or changing kind, or a
 row that fails on the base fails the check unless the PR carries the
 `bench-accepted` label; adding or removing the label runs it again. The
-crate, the Python package and the Go module are measured the same way, by
-the commands their READMEs name.
+crate, the Python package, the Go module and the Composer package are
+measured the same way, by the commands their READMEs name.
 
 ## Releasing
 
@@ -236,6 +237,75 @@ dispatched again. A version the proxy has served stays served, and its sum
 stays in the checksum database for good: a tag of the mirror is never moved
 or deleted, and a bad version is retracted by a `retract` line in the
 `go.mod` of the next.
+
+### The Composer package
+
+Packagist reads a package from the root of a repository, and its versions
+from tags that Composer parses as versions, and Composer installs the files
+of such a tag and builds nothing, so the native commands have to be files of
+that tree. They are no files of this repository, which holds source: the
+package is served from
+[`curly-message/lint-php`](https://github.com/curly-message/lint-php), a
+repository that only the **PHP publish** workflow
+(`.github/workflows/publish-php.yml`, started by hand with the kind of
+release) writes to. A change to the package is a pull request to `php/` here.
+
+The workflow reads `php/CHANGELOG.md`'s pending section and the release types
+as the others do, and keeps the version in `php/package.json`, which nothing
+publishes. Packagist has no dist-tags: `next` cuts a release candidate
+(`1.1.0-RC.0`), which Composer installs only where a project asks for that
+stability. As for the Go module, the workflow refuses a release while the
+crate on `main` is not the crate's newest release of its kind, or while
+`php/README.md` and the changelog's pending section do not name that
+release. It then runs **PHP build** (`.github/workflows/build-php.yml`),
+which runs **Python build** for the command of each platform, built and
+tested there, takes five of them out of their wheels (for Linux the ones
+linked statically against musl, for Windows the x86-64 one), and packs them
+with the launcher by `php/pack.sh`: the archive of the tree's tag, as GitHub
+serves the mirror's to Composer, in a Composer repository of that one
+version, which Composer installs from. The build lints that tree, writes the
+benchmark of that package into `BENCH.md`, and on each platform, with each
+PHP from 8.2 to the newest (on macOS the two ends, on Windows on ARM the
+newest), installs the package from that repository, as Composer unpacks it
+by default and, but on Windows, as it unpacks it with PHP's own zip, runs
+the launcher's tests over each install and, on the oldest PHP and the
+newest, holds the installed command to `cli.rs`.
+
+The release job takes the five commands whose digests the build recorded,
+commits the version and `php/BENCH.md` and tags (`php-v1.1.0`) here, and
+makes the mirror's commit: `php/` as that tag holds it, but for `BENCH.md`,
+which was measured on the package and so is no file of it, with the five
+commands in `commands/`, on top of the mirror's `main`, tagged `v1.1.0`. It
+pushes neither unless that commit's tree is the one the build packed and
+tested. It pushes this repository first, then the mirror. No step publishes
+to Packagist, which learns of the tag through its GitHub hook: the job asks
+`repo.packagist.org` for the version for up to 35 minutes, until it is
+served from the commit the mirror's tag names, then downloads the archive
+Packagist names for it and holds it to the one the build packed, by its
+files and by the mode of each command. It publishes a GitHub release in
+both repositories, carrying the changelog section and the SHA-256 of each
+command, never marked as this repository's latest. It runs in the same
+three jobs, with the same `release` environment, and the App, installed on
+the mirror too, is what writes to it: no registry holds a credential.
+
+The first release takes two steps by hand, since Packagist reads a package's
+name off the `composer.json` on its repository's default branch, which the
+mirror has only once the workflow has pushed it. Before the run, the mirror
+exists, empty, with the App installed on it. Once the run has pushed, and
+while it waits for Packagist, the mirror's URL is submitted on packagist.org
+by an account that maintains a package of the `curly-message` vendor, with
+Packagist's GitHub hook. A later release is refused before anything is
+tagged or pushed while the package is not on Packagist.
+
+A release that stops once its tag exists, as one whose wait for Packagist
+ran out, is finished by re-running its failed jobs while the build's
+artifact is kept, which builds nothing again: the job finds each tag holding
+the tree it would push, pushes what is missing and asks Packagist once more.
+GitHub re-runs a run's jobs for 30 days after the run began. Re-running all
+jobs, or a new run, does not finish it: a new build measures another
+`BENCH.md` than the tag holds, and a new run cuts the next version. Packagist
+locks the commit of a version it has read: a tag of the mirror is never
+moved or deleted, and a bad version is followed by the next.
 
 ## License
 

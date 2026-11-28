@@ -31,6 +31,7 @@ JavaScript package, which runs the crate compiled to WebAssembly.
 | `rust/` | `curly-message-lint`: the rules, the catalogue reader and the `curly-lint` command; `rust/wasm/`, the binding the library is built from |
 | `python/` | `curly-message-lint` on PyPI: the crate's `curly-lint` command, a native program in a wheel per platform |
 | `go/` | `github.com/curly-message/lint-go`: the crate's `curly-lint` command for the go command, a launcher in Go that carries the native program of its platform; served from `curly-message/lint-go` |
+| `php/` | `curly-message/lint` for Composer: the crate's `curly-lint` command for Composer, a launcher in PHP that runs the native program of its platform; served from `curly-message/lint-php` |
 
 - **Workspaces of one root**, because the plugin depends on the library and
   both change together: one lockfile at the root, one `npm ci`, each
@@ -68,12 +69,30 @@ JavaScript package, which runs the crate compiled to WebAssembly.
   is a change to `go/` here. The module's path names no major version, so
   its version line stays below `v2`, and a version the module proxy has
   served is never moved or deleted: a bad one is retracted by the next.
+- **`php/` is a Composer package of its own**, outside all four: the
+  launcher, `bin/curly-lint`, one file of PHP that requires no package and
+  no extension, and `pack.sh`, which packs it with the native commands as a
+  release serves it. The commands are no file of this repository: the
+  launcher runs the one of its platform from `commands/`, which is ignored
+  here and which only the mirror holds, so the package is installed here
+  once `bench/prepare.sh` has built this machine's there. The launcher is
+  tested only as Composer installs it, never from the working tree. Run its
+  commands from `php/`.
+- **The Composer package is served from `curly-message/lint-php`**, which
+  Packagist reads and only `publish-php.yml` writes to: a version there is
+  `php/` as its tag `php-vX.Y.Z` holds it here, but for `BENCH.md`, with
+  the five commands built from that tag, tagged `vX.Y.Z`. A change to the
+  package is a change to `php/` here. Packagist locks the commit of each
+  version it has read, a release candidate included, so a tag of the mirror
+  is never moved or deleted: a bad version is followed by the next.
 - **Release tags are namespaced by directory** — `lint-v1.0.0`,
-  `eslint-plugin-v1.0.0`, `rust-v1.0.0`, `python-v1.0.0`, `go-v1.0.0` — and
+  `eslint-plugin-v1.0.0`, `rust-v1.0.0`, `python-v1.0.0`, `go-v1.0.0`,
+  `php-v1.0.0` — and
   the publish workflows cut them (`.github/workflows/publish.yml` for the
   workspaces, `publish-rust.yml` for the crate, `publish-python.yml` for the
-  Python package, `publish-go.yml` for the Go module, which tags the mirror
-  `v1.0.0` too; the README's Releasing section says what they do).
+  Python package, `publish-go.yml` for the Go module and `publish-php.yml`
+  for the Composer package, each of which tags its mirror `v1.0.0` too; the
+  README's Releasing section says what they do).
 - **The lockfile is written with npm 11** (`npx npm@11 install`). npm 10 fails
   to resolve the workspaces' peer dependencies, though it installs from the
   lockfile (`npm ci`) as CI's Node 22 does.
@@ -114,7 +133,7 @@ Tech stack of `rust/` — **ground truth, do not assume otherwise**:
 | Lint | rustfmt and Clippy, at the lints `Cargo.toml` denies: a panic, an index, a slice of a `str`, unchecked arithmetic, a character outside ASCII in a literal, a write to the standard streams |
 | Features | `cldr`, default: the plural rules of the Unicode CLDR as data in the crate (`cldr/`, under the Unicode License v3), which the binary requires |
 | Dependencies | `curly-message-parser`, and `unicode-properties` for the characters a report shows by code point; `serde_json`, `sha2` and `libtest-mimic` for the tests alone |
-| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml`, `publish-rust.yml`; a change under `rust/` runs the npm jobs and benchmarks too, which build it, and `tests-python.yml`, `tests-go.yml` and the `python` and `go` legs of `bench.yml`, which ship it |
+| CI | the `Rust` and `Rust-lint` jobs of `tests.yml`, the `rust` leg of `bench.yml`, `publish-rust.yml`; a change under `rust/` runs the npm jobs and benchmarks too, which build it, and `tests-python.yml`, `tests-go.yml`, `tests-php.yml` and the `python`, `go` and `php` legs of `bench.yml`, which ship it |
 
 Tech stack of `python/` — **ground truth, do not assume otherwise**:
 
@@ -140,6 +159,20 @@ Tech stack of `go/` — **ground truth, do not assume otherwise**:
 | Runtime dependencies | none: the module requires no module |
 | Licenses | `LICENSE`, a copy of the root's, and `THIRD-PARTY-NOTICES.md` in the module, both held by `tests.yml`: the notices to the rows and the texts of the Python package's, so a crate the binary gains is a row in both |
 | CI | `tests-go.yml` (calls `build-go.yml`, which calls `build.yml`; filtered by path, so never a required check), the `go` leg of `bench.yml`, `publish-go.yml` |
+
+Tech stack of `php/` — **ground truth, do not assume otherwise**:
+
+| | |
+|---|---|
+| Package | `curly-message/lint` for Composer, the `curly-lint` command alone, no PHP API and nothing for an autoloader; unreleased. Its own version line, release candidates `X.Y.Z-RC.N`; the README and the changelog name the crate release each version carries |
+| Language | PHP 8.2+, one file, `bin/curly-lint`, with `declare(strict_types=1)`; no extension |
+| Build | none here: `pack.sh` puts the commands beside the launcher in a git repository of its own, archives its tag as GitHub serves the mirror's to Composer, and has Composer install that archive from a Composer repository of the one version; the commands are those of the wheels `build.yml` builds, for Linux the ones linked statically against musl |
+| Platforms | Linux and macOS on x86-64 and ARM64, Windows on x86-64, each command named by what PHP reports there, `commands/curly-lint-<PHP_OS_FAMILY>-<php_uname('m')>`, `.exe` on Windows; on any other the launcher holds no command, says so and exits 2 |
+| Tests | `tests/launcher.php`, in the standard library alone, in `build-php.yml`, over the package as Composer installs it from the packed archive: on Linux and Windows with each PHP from 8.2 to 8.6, on macOS with the two ends, on Windows on ARM with the newest; on Linux and macOS over a second install, unpacked by ext-zip, which loses each file's mode; `rust/tests/cli.rs` against the installed launcher on the two ends, and on Linux a run in Alpine beside the runner's glibc |
+| Lint | php-cs-fixer and PHPStan at level max, from `tools/qa/` (its own `composer.lock`, for PHP 8.2), `composer validate --strict`, ASCII-only `bin/curly-lint` and `tests/*.php`, all run by `build-php.yml`'s Package job on the packed tree |
+| Runtime dependencies | none: the package requires PHP alone |
+| Licenses | `LICENSE`, a copy of the root's, and `THIRD-PARTY-NOTICES.md` in the package, both held by `tests.yml`: the notices to the rows and the texts of the Python package's, so a crate the binary gains is a row in each |
+| CI | `tests-php.yml` (calls `build-php.yml`, which calls `build.yml`; filtered by path, so never a required check), the `php` leg of `bench.yml`, `publish-php.yml` |
 
 Commands, run from the root:
 
@@ -218,6 +251,18 @@ Commands, run from `go/`:
 | `sh pack.sh <commands> <out>` | the module as a release serves it, with the commands `<commands>` holds: its tree, a proxy of it for `GOPROXY=file://`, and its `h1:` sum |
 | `CURLY_LINT_BIN=<installed curly-lint> cargo test -p curly-message-lint --locked --test cli`, from `rust/` | `cli.rs` against an installed launcher |
 
+Commands, run from `php/`:
+
+| Command | What it does |
+|---------|--------------|
+| `sh bench/prepare.sh && node bench/harness.mjs` | build the crate's command for this machine into `commands/`, pack the package with it, have Composer install it from that into `bench/dist/`, then the benchmark (`bench/rows.mjs`) |
+| `node bench/harness.mjs --compare <dir>` | the same, beside the package prepared at `<dir>` — what `bench.yml` runs on a PR |
+| `php tests/launcher.php bench/dist` | the launcher's tests, over the package `bench/prepare.sh` installed |
+| `composer install -d tools/qa`, `tools/qa/vendor/bin/php-cs-fixer fix --dry-run --diff`, `tools/qa/vendor/bin/phpstan analyse` | the formatting and lint contract (`fix` without `--dry-run` fixes the first) |
+| `sh pack.sh <commands> <out>` | the package as a release serves it, with the commands `<commands>` holds: its tree, a Composer repository of its archive, and what it recorded of both |
+| `node tools/p2.mjs <answer> <version>` | the commit and the archive Packagist's metadata names for a version, as `publish-php.yml` reads them |
+| `CURLY_LINT_BIN=<bench/dist/vendor/bin/curly-lint> cargo test -p curly-message-lint --locked --test cli`, from `rust/` | `cli.rs` against the installed launcher |
+
 `fixtures/` at the root is the linter's contract as data, for every
 implementation: JSON cases of a message, a list of entries or a catalogue
 file's text, each with its findings, and the plural rules a case is read with
@@ -227,11 +272,12 @@ in place of the host's; `fixtures/schema.json` is their schema and
 Each workspace's `bench/rows.mjs` lists the rows of its benchmark, each read
 off the build. `bench/harness.mjs` at the root measures them for both,
 `bench/check/` beside it holds the rows it is checked on, and both are the same
-in every repository of the family. `rust/bench/`, `python/bench/` and
-`go/bench/` hold their own copies of both, which `tests.yml` holds to the
-root's, and rows that read a release build: the crate's over a child
-process, the Python package's wheel, sdist and installed command, and the Go
-module's zip and installed launcher.
+in every repository of the family. `rust/bench/`, `python/bench/`,
+`go/bench/` and `php/bench/` hold their own copies of both, which `tests.yml`
+holds to the root's, and rows that read a release build: the crate's over a
+child process, the Python package's wheel, sdist and installed command, the
+Go module's zip and installed launcher, and the Composer package's archive
+and installed launcher.
 
 ## The format decides, not the linter
 
@@ -336,6 +382,10 @@ editors on every keystroke.
   `go/CHANGELOG.md`, the crate release the module carries;
   `go/THIRD-PARTY-NOTICES.md` lists what the six commands hold, as the
   Python package's does of the same binaries, and the module holds it.
+- `php/README.md` is the page Packagist shows and names, with
+  `php/CHANGELOG.md`, the crate release the package carries;
+  `php/THIRD-PARTY-NOTICES.md` lists what the five commands hold, as the
+  Python package's does of the same binaries, and the package holds it.
 - A finding's message is English, says what is wrong and what happens instead,
   and quotes what it is about in backticks.
 
