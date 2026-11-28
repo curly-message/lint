@@ -150,7 +150,7 @@ Tech stack of `go/` — **ground truth, do not assume otherwise**:
 
 | | |
 |---|---|
-| Module | `github.com/curly-message/lint-go`, one package, `cmd/curly-lint`, the `curly-lint` command alone, no Go API; unreleased. Its own version line, below `v2`; the README and the changelog name the crate release each version carries |
+| Module | `github.com/curly-message/lint-go`, one package, `cmd/curly-lint`, the `curly-lint` command alone, no Go API; released, `v1.0.0`; the first version, the prerelease `v1.0.0-next.0`, was cut by the workflow, whose tag on the mirror is the release. Its own version line, below `v2`; the README and the changelog name the crate release each version carries |
 | Language | Go 1.24+, the first with a `tool` line in `go.mod`; the standard library alone |
 | Build | none here: `pack.sh` puts the commands beside the launcher in a git repository of its own and has the go command fetch it, as the proxy fetches the mirror, which writes the module's zip and its `h1:` sum; the commands are those of the wheels `build.yml` builds, for Linux the ones linked statically against musl |
 | Platforms | `linux`, `darwin` and `windows` on `amd64` and `arm64`; built for any other, Android and iOS among them, the launcher holds no command, says so and exits 2 |
