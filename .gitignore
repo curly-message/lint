@@ -21,3 +21,8 @@ Thumbs.db
 
 # The native commands the Go launcher embeds, which only its mirror holds.
 go/cmd/curly-lint/bin/
+
+# The native commands the PHP launcher runs, which only its mirror holds,
+# and the lint tools Composer installs for it.
+php/commands/
+php/tools/qa/vendor/

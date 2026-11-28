@@ -1,0 +1,9 @@
+includes:
+    - tools/qa/vendor/phpstan/phpstan-strict-rules/rules.neon
+
+parameters:
+    level: max
+    phpVersion: 80200
+    paths:
+        - bin/curly-lint
+        - tests

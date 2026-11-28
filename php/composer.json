@@ -1,0 +1,24 @@
+{
+    "name": "curly-message/lint",
+    "description": "The curly-lint command, a linter for the Curly Message Format, as a native program.",
+    "type": "library",
+    "license": "MIT AND Unicode-3.0 AND Apache-2.0 WITH LLVM-exception",
+    "keywords": [
+        "curly-message",
+        "i18n",
+        "lint",
+        "translation",
+        "catalogue"
+    ],
+    "homepage": "https://curlymessage.dev/",
+    "support": {
+        "issues": "https://github.com/curly-message/spec/issues",
+        "source": "https://github.com/curly-message/lint/tree/main/php"
+    },
+    "require": {
+        "php": ">=8.2"
+    },
+    "bin": [
+        "bin/curly-lint"
+    ]
+}

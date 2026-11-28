@@ -1,0 +1,12 @@
+* text=auto eol=lf
+/commands/* -text
+
+/tests export-ignore
+/bench export-ignore
+/tools export-ignore
+/pack.sh export-ignore
+/package.json export-ignore
+/phpstan.neon export-ignore
+/.php-cs-fixer.dist.php export-ignore
+/.php-version export-ignore
+/.gitattributes export-ignore
