@@ -150,8 +150,9 @@ Linux or macOS with PHP, Composer, git, Rust and Node, builds the command
 for that machine, packs the package with it as a release packs it with all
 five, has Composer install it into a project from that, and measures the
 size of the archive and of the launcher, the packages the project installed,
-and three times of the installed command. `node bench/harness.mjs --compare
-<dir>` sets it beside the package prepared the same way at `<dir>`.
+and three times of the installed command.
+`node bench/harness.mjs --compare <dir>` sets it beside the package prepared
+the same way at `<dir>`.
 
 ## License
 
