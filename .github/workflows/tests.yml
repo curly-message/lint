@@ -211,11 +211,11 @@ jobs:
         run: cargo build -p curly-message-lint --lib --no-default-features --target wasm32-unknown-unknown --locked
 
       # The harness and the rows it is checked on are the family's, the same
-      # file in every package: the crate's copies, the Python package's and
-      # the Go module's.
+      # file in every package: the crate's copies, the Python package's, the
+      # Go module's and the Composer package's.
       - name: Benchmark harness
         run: |
-          for package in . ../python ../go; do
+          for package in . ../python ../go ../php; do
             cmp "$package/bench/harness.mjs" ../bench/harness.mjs
             diff -r "$package/bench/check" ../bench/check
           done
@@ -231,3 +231,13 @@ jobs:
           texts() { sed -n '/^## /,$p' "$1"; }
           diff <(rows ../python/THIRD-PARTY-NOTICES.md) <(rows ../go/THIRD-PARTY-NOTICES.md)
           diff <(texts ../python/THIRD-PARTY-NOTICES.md) <(texts ../go/THIRD-PARTY-NOTICES.md)
+
+      # The Composer package is served from a repository of its own too, and
+      # holds five of the same commands: the same license, rows and texts.
+      - name: The Composer package's license and notices
+        run: |
+          cmp ../php/LICENSE ../LICENSE
+          rows() { grep '^| ' "$1" | cut -d'|' -f2,4; }
+          texts() { sed -n '/^## /,$p' "$1"; }
+          diff <(rows ../python/THIRD-PARTY-NOTICES.md) <(rows ../php/THIRD-PARTY-NOTICES.md)
+          diff <(texts ../python/THIRD-PARTY-NOTICES.md) <(texts ../php/THIRD-PARTY-NOTICES.md)

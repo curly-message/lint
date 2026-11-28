@@ -1,0 +1,328 @@
+name: PHP build
+
+# The Composer package as a release serves it: the native command of each
+# platform, taken out of the wheel `build.yml` builds and tests there, packed
+# with the launcher of `php/` by `php/pack.sh`, then installed by Composer
+# and tested on each platform, as a project that requires the package gets
+# it. The tests and the publish workflow both call it, so what is published
+# is built and tested as every pull request's build is.
+on:
+  workflow_call:
+    inputs:
+      artifacts:
+        description: 'What each artifact is named for: <artifacts>-<target>, and <artifacts>-package'
+        type: string
+        default: build
+      patch:
+        description: 'A release bump to apply before building, as git diff --binary in base64'
+        type: string
+        default: ''
+      changes:
+        description: 'The files that bump changes, as git status --porcelain lists them'
+        type: string
+        default: ''
+      benchmark:
+        description: 'Write BENCH.md beside the package, measured on it'
+        type: boolean
+        default: false
+    outputs:
+      digests:
+        description: 'Each native command, as <sha256>:<name>, comma-separated'
+        value: ${{ jobs.Package.outputs.digests }}
+      tree:
+        description: 'The git tree the package is, which the mirror holds at its tag'
+        value: ${{ jobs.Package.outputs.tree }}
+      zip:
+        description: 'The SHA-256 of the archive the platforms installed from'
+        value: ${{ jobs.Package.outputs.zip }}
+
+permissions:
+  contents: read
+
+env:
+  PACKAGE: curly-message/lint
+
+jobs:
+  # A wheel per platform, each holding the command built and tested there. The
+  # package takes five of the eight: for Linux the ones linked statically
+  # against musl, which run beside any C library, and for Windows the x86-64
+  # one, which Windows on ARM runs too.
+  Commands:
+    uses: ./.github/workflows/build.yml
+    with:
+      artifacts: ${{ inputs.artifacts }}
+      patch: ${{ inputs.patch }}
+      changes: ${{ inputs.changes }}
+
+  Package:
+    needs: Commands
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: php
+    outputs:
+      digests: ${{ steps.commands.outputs.digests }}
+      tree: ${{ steps.pack.outputs.tree }}
+      zip: ${{ steps.pack.outputs.zip }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # From the root: run in a subdirectory, git apply drops every path
+      # outside it without a word.
+      - name: Apply the bump
+        if: inputs.patch != ''
+        working-directory: .
+        env:
+          PATCH: ${{ inputs.patch }}
+          CHANGES: ${{ inputs.changes }}
+        run: |
+          base64 -d <<< "$PATCH" | git apply
+          changes=$(git status --porcelain | cut -c4- | paste -sd ' ' -)
+          [ "$changes" = "$CHANGES" ] || { echo "::error::The bump changes '$changes' here and changed '$CHANGES' where it was made."; exit 1; }
+
+      # The oldest PHP the package states, which `tools/qa/` is locked for:
+      # what is linted here is what every newer PHP reads the same.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: zip
+          coverage: none
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      # Each wheel in a directory named for its target, outside the checkout.
+      - name: Download the wheels
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ${{ inputs.artifacts }}-*
+          path: ${{ runner.temp }}/wheels
+
+      # A wheel holds the command as its one script. Each is read out of the
+      # one wheel its leg uploaded, under the name the launcher builds from
+      # what PHP calls that platform.
+      - name: Take the commands
+        id: commands
+        env:
+          ARTIFACTS: ${{ inputs.artifacts }}
+        run: |
+          mkdir "$RUNNER_TEMP/commands"
+          while read -r target name; do
+            wheels=("$RUNNER_TEMP/wheels/$ARTIFACTS-$target"/*.whl)
+            [ "${#wheels[@]}" = 1 ] && [ -f "${wheels[0]}" ] || { echo "::error::The build for $target holds ${#wheels[@]} wheels, not one."; exit 1; }
+            case "$name" in *.exe) script=curly-lint.exe ;; *) script=curly-lint ;; esac
+            held=$(unzip -Z1 "${wheels[0]}" | grep -cE "^[^/]+\.data/scripts/$script$") || held=0
+            [ "$held" = 1 ] || { echo "::error::The wheel for $target holds $held commands, not one."; exit 1; }
+            unzip -p "${wheels[0]}" "*.data/scripts/$script" > "$RUNNER_TEMP/commands/$name"
+            [ -s "$RUNNER_TEMP/commands/$name" ] || { echo "::error::The command for $target is empty."; exit 1; }
+          done <<'TARGETS'
+          x86_64-unknown-linux-musl curly-lint-Linux-x86_64
+          aarch64-unknown-linux-musl curly-lint-Linux-aarch64
+          x86_64-apple-darwin curly-lint-Darwin-x86_64
+          aarch64-apple-darwin curly-lint-Darwin-arm64
+          x86_64-pc-windows-msvc curly-lint-Windows-AMD64.exe
+          TARGETS
+          digests=$(cd "$RUNNER_TEMP/commands" && sha256sum -- * | sed -E 's/^([0-9a-f]+) [ *](.*)$/\1:\2/' | paste -sd ',' -)
+          echo "digests=$digests" >> "$GITHUB_OUTPUT"
+
+      # The package, installed by Composer from the archive of the tree's
+      # tag, as it installs a release from the mirror's: the tree is the one
+      # a release of it pushes there.
+      - name: Pack
+        id: pack
+        run: |
+          sh pack.sh "$RUNNER_TEMP/commands" "$RUNNER_TEMP/package"
+          [ "$(jq -r '.commands | length' "$RUNNER_TEMP/package/package.json")" = 5 ] || { echo "::error::The package is to hold five commands."; exit 1; }
+          {
+            echo "tree=$(jq -r .tree "$RUNNER_TEMP/package/package.json")"
+            echo "zip=$(jq -r .zip.sha256 "$RUNNER_TEMP/package/package.json")"
+          } >> "$GITHUB_OUTPUT"
+
+      # The formatting and lint contract, on the tree a release serves.
+      - name: Lint
+        working-directory: ${{ runner.temp }}/package/tree
+        run: |
+          composer validate --strict
+          composer install -d tools/qa --no-interaction --no-progress
+          tools/qa/vendor/bin/php-cs-fixer fix --dry-run --diff
+          tools/qa/vendor/bin/phpstan analyse --no-progress
+          if LC_ALL=C grep -nP '[^\x00-\x7F]' bin/curly-lint tests/*.php; then echo "::error::A PHP file holds a character outside ASCII."; exit 1; fi
+
+      # A release reads the commit Packagist serves a version from out of its
+      # minified metadata, through this script: held here to a saved answer,
+      # where the second version is written as its difference from the first.
+      - name: Test the reader of Packagist's metadata
+        run: |
+          zipball=https://api.github.com/repos/curly-message/parser-php/zipball
+          while read -r version commit; do
+            found=$(node tools/p2.mjs tests/p2/parser.json "$version")
+            [ "$found" = "$commit $zipball/$commit" ] || { echo "::error::$version reads as '$found', not as $commit."; exit 1; }
+          done <<'VERSIONS'
+          1.0.0 e152bedde3afc7888c33f023b85491f9e3121558
+          1.0.0-RC.0 92c1bb7180b8d952968a23d690eaea59566890b5
+          VERSIONS
+          status=0
+          node tools/p2.mjs tests/p2/parser.json 1.0.1 || status=$?
+          [ "$status" = 1 ] || { echo "::error::A version the answer lacks exits $status, not 1."; exit 1; }
+
+      # Each release records what it costs, measured on the very package it
+      # serves; a row that fails stops the release here.
+      - name: Benchmark
+        if: inputs.benchmark
+        run: |
+          node bench/check/check.mjs
+          sh bench/prepare.sh "$RUNNER_TEMP/package/repo"
+          node bench/harness.mjs > "$RUNNER_TEMP/package/BENCH.md"
+
+      # The commands, the repository the platforms install from, and what the
+      # pack recorded; the tree is made again from these where it is used.
+      - name: Gather the package
+        run: |
+          rm -rf "$RUNNER_TEMP/package/tree"
+          cp -R "$RUNNER_TEMP/commands" "$RUNNER_TEMP/package/commands"
+
+      - name: Upload the package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifacts }}-package
+          path: ${{ runner.temp }}/package/
+          if-no-files-found: error
+
+  # The launcher as a project gets it: installed by Composer from a
+  # repository that serves the package's archive, on each platform it holds a
+  # command for and on each PHP it states. macOS runs the oldest and the
+  # newest, and Windows on ARM, where PHP is the x86-64 build, the newest.
+  Shipped:
+    needs: Package
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, windows-latest]
+        php: ['8.2', '8.3', '8.4', '8.5', '8.6']
+        include:
+          - { runner: macos-15-intel, php: '8.2' }
+          - { runner: macos-15-intel, php: '8.6' }
+          - { runner: macos-latest, php: '8.2' }
+          - { runner: macos-latest, php: '8.6' }
+          - { runner: windows-11-arm, php: '8.6' }
+    defaults:
+      run:
+        shell: bash
+    env:
+      # `cli.rs` builds the crate's tests, so it runs on the ends alone.
+      ENDS: ${{ matrix.php == '8.2' || matrix.php == '8.6' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # With ext-zip, which Composer unpacks with where it finds no `unzip`
+      # to run.
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: zip
+          coverage: none
+
+      - name: Setup Rust
+        if: env.ENDS == 'true'
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+
+      - name: Download the package
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ inputs.artifacts }}-package
+          path: ${{ runner.temp }}/package
+
+      # From the repository alone and past Composer's cache, into a project
+      # of its own. The repository names its archive by where it was packed,
+      # so it is named by where it is now.
+      - name: Install the package
+        run: |
+          if [ "$RUNNER_OS" = Windows ]; then temp=$(cygpath -m "$RUNNER_TEMP"); repo="file:///$temp/package/repo"; else temp=$RUNNER_TEMP; repo="file://$temp/package/repo"; fi
+          version=$(jq -r .version "$temp/package/package.json")
+          sed -i.moved "s|\"url\": \"file://[^\"]*\"|\"url\": \"$repo/lint.zip\"|" "$temp/package/repo/packages.json"
+          rm "$temp/package/repo/packages.json.moved"
+          for project in project unpacked; do
+            mkdir "$temp/$project"
+            printf '{"repositories": [{"type": "composer", "url": "%s"}, {"packagist.org": false}]}\n' "$repo" > "$temp/$project/composer.json"
+          done
+          [ "$RUNNER_OS" = Windows ] && launcher="$temp/project/vendor/bin/curly-lint.bat" || launcher="$temp/project/vendor/bin/curly-lint"
+          {
+            echo "TEMP_DIRECTORY=$temp"
+            echo "VERSION=$version"
+            echo "LAUNCHER=$launcher"
+          } >> "$GITHUB_ENV"
+          cd "$temp/project"
+          composer require --no-interaction --no-cache --no-plugins --no-progress "$PACKAGE:$version"
+
+      # The launcher's tests, over the package where Composer put it.
+      - name: Test the launcher
+        run: php php/tests/launcher.php "$TEMP_DIRECTORY/project"
+
+      # Composer runs `unzip` where it can start a program, and unpacks with
+      # ext-zip where it cannot, which writes every file without its mode:
+      # the install a host that disables `proc_open` for Composer gets, and
+      # the one the launcher gives the command its mode back after.
+      - name: Install it as ext-zip unpacks it
+        if: runner.os != 'Windows'
+        working-directory: ${{ runner.temp }}/unpacked
+        run: |
+          php -d disable_functions=proc_open "$(command -v composer)" require --no-interaction --no-cache --no-plugins --no-progress "$PACKAGE:$VERSION"
+          command="vendor/$PACKAGE/commands/$(php -r 'echo "curly-lint-", PHP_OS_FAMILY, "-", php_uname("m");')"
+          [ -f "$command" ] && [ ! -x "$command" ] || { echo "::error::$command was to be installed without its mode."; ls -l "vendor/$PACKAGE/commands"; exit 1; }
+
+      - name: Test the launcher as ext-zip unpacked it
+        if: runner.os != 'Windows'
+        run: php php/tests/launcher.php "$TEMP_DIRECTORY/unpacked"
+
+      # `cli.rs` against the installed launcher, which is to be the crate's
+      # command in every argument, stream and exit status.
+      - name: Test the installed command
+        if: env.ENDS == 'true'
+        working-directory: rust
+        run: CURLY_LINT_BIN="$LAUNCHER" cargo test -p curly-message-lint --locked --test cli
+
+      # The runner's C library is glibc and Alpine's is musl: a command for
+      # Linux that needed either at run time fails on one of the two. The
+      # package is installed there by the runner's Composer, from the same
+      # repository under the same path, and tested as it is here.
+      - name: Test it on Alpine
+        if: runner.os == 'Linux'
+        env:
+          PHP: ${{ matrix.php }}
+        run: |
+          mkdir "$RUNNER_TEMP/alpine"
+          cp "$RUNNER_TEMP/project/composer.json" "$RUNNER_TEMP/alpine/composer.json"
+          docker run --rm \
+            -v "$RUNNER_TEMP/package/repo:$RUNNER_TEMP/package/repo:ro" \
+            -v "$RUNNER_TEMP/alpine:/project" \
+            -v "$(realpath "$(command -v composer)"):/usr/local/bin/composer:ro" \
+            -v "$GITHUB_WORKSPACE/php/tests:/tests:ro" \
+            -e COMPOSER_ALLOW_SUPERUSER=1 \
+            "php:$PHP-cli-alpine" sh -ec '
+              cd /project
+              php /usr/local/bin/composer install --no-interaction --no-cache --no-plugins --no-progress
+              php /tests/launcher.php /project
+              printf "{\"greeting\":\"Hello, {{name\"}" > /tmp/catalogue.json
+              cd /tmp
+              status=0
+              /project/vendor/bin/curly-lint --locale en catalogue.json > report.txt || status=$?
+              [ "$status" = 1 ]
+              grep -q unclosed-placeholder report.txt'

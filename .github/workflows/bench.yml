@@ -2,14 +2,14 @@ name: Benchmark
 
 # The benchmark of a PR against its base, posted on the PR and in the job's
 # summary, one per workspace, one for the Rust crate, one for the Python
-# package and one for the Go module. It fails where the benchmark does: a
-# row of the branch that fails, or, unless the PR carries the `bench-accepted` label, a
-# count that grew, a row gone missing or changing kind, or a row that fails on
-# the base. Whether the base has the workspace's benchmark is read from the
-# base commit: one without its `bench/rows.mjs`, as the base of the PR that
-# adds the workspace or its rows, is neither built nor compared, so only the
-# branch's own benchmark can fail the job. `bench-label.yml` re-runs it when
-# that label changes.
+# package, one for the Go module and one for the Composer package. It fails
+# where the benchmark does: a row of the branch that fails, or, unless the PR
+# carries the `bench-accepted` label, a count that grew, a row gone missing or
+# changing kind, or a row that fails on the base. Whether the base has the
+# workspace's benchmark is read from the base commit: one without its
+# `bench/rows.mjs`, as the base of the PR that adds the workspace or its
+# rows, is neither built nor compared, so only the branch's own benchmark can
+# fail the job. `bench-label.yml` re-runs it when that label changes.
 on:
   pull_request:
     paths:
@@ -19,6 +19,7 @@ on:
       - rust/**
       - python/**
       - go/**
+      - php/**
       - package.json
       - package-lock.json
       - '!**/*.md'
@@ -42,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [lint, eslint-plugin, rust, python, go]
+        package: [lint, eslint-plugin, rust, python, go, php]
 
     steps:
       - name: Checkout the branch
@@ -120,11 +121,20 @@ jobs:
           go-version-file: change/go/go.mod
           cache: false
 
-      # The crate, the Python package and the Go module by their
-      # `bench/prepare.sh`, on the runner's Rust; the base under the same
-      # terms.
+      # The Composer package is packed and installed by the PHP it names.
+      - name: Setup PHP
+        if: matrix.package == 'php'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version-file: change/php/.php-version
+          extensions: zip
+          coverage: none
+
+      # The crate, the Python package, the Go module and the Composer package
+      # by their `bench/prepare.sh`, on the runner's Rust; the base under the
+      # same terms.
       - name: Prepare the package
-        if: matrix.package == 'rust' || matrix.package == 'python' || matrix.package == 'go'
+        if: matrix.package == 'rust' || matrix.package == 'python' || matrix.package == 'go' || matrix.package == 'php'
         env:
           HOLDS: ${{ steps.base.outputs.holds }}
           PACKAGE: ${{ matrix.package }}
