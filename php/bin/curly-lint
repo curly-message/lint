@@ -1,0 +1,73 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+// The launcher of the `curly-lint` command: it runs the native program this
+// package holds for the platform PHP runs on, in place, on its own streams,
+// and exits with its status. Whatever it cannot do is one line on standard
+// error and status 2, the status the command gives a fault.
+
+$refuse = static function (string $why): never {
+    fwrite(STDERR, "curly-lint: {$why}\n");
+
+    exit(2);
+};
+
+// PHP removes a function its configuration disables, and a call of one is a
+// fatal error: these are the ones a host disables.
+foreach (['php_uname', 'proc_open', 'proc_close'] as $needed) {
+    if (!function_exists($needed)) {
+        $refuse("cannot run: this PHP has {$needed} disabled.");
+    }
+}
+
+$family = PHP_OS_FAMILY;
+$machine = php_uname('m');
+$command = dirname(__DIR__) . "/commands/curly-lint-{$family}-{$machine}" . ($family === 'Windows' ? '.exe' : '');
+
+if (!is_file($command)) {
+    $refuse("this package holds no command for {$family} on {$machine}: {$command} is no file. It holds one for Linux and macOS on x86-64 and ARM64 and for Windows on x86-64.");
+}
+
+// An archive unpacked by PHP's own zip loses the mode the file is held with.
+if (!is_executable($command) && function_exists('chmod')) {
+    @chmod($command, 0755);
+}
+
+if (!is_executable($command)) {
+    $refuse("{$command} is not a program this user can run (its mode, its owner, or a noexec mount), and chmod could not change that.");
+}
+
+// On a Windows console, Ctrl-C reaches the command and the launcher alike. A
+// handler that does nothing keeps the launcher waiting for the command's
+// status; ignoring the event instead would be inherited by the command.
+if (function_exists('sapi_windows_set_ctrl_handler')) {
+    sapi_windows_set_ctrl_handler(static function (int $event): void {});
+}
+
+// A PHP whose `variables_order` names no S fills no $_SERVER.
+$given = $_SERVER['argv'] ?? $GLOBALS['argv'] ?? null;
+$line = [$command];
+
+foreach (is_array($given) ? array_slice($given, 1) : [] as $argument) {
+    if (is_string($argument)) {
+        $line[] = $argument;
+    }
+}
+
+// A command PHP is told did not start is a warning too, which a PHP that
+// displays its errors writes into the command's output.
+$process = @proc_open($line, [STDIN, STDOUT, STDERR], $pipes);
+
+if ($process === false) {
+    $refuse("{$command} could not be run.");
+}
+
+$status = proc_close($process);
+
+if ($status === -1) {
+    $refuse('the command ran, and PHP could not read its exit status.');
+}
+
+exit($status);

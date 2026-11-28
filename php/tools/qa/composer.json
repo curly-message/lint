@@ -1,0 +1,17 @@
+{
+    "name": "curly-message/lint-qa",
+    "description": "The formatting contract and the static analysis of curly-message/lint's launcher and its tests.",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "friendsofphp/php-cs-fixer": "^3.75",
+        "phpstan/phpstan": "^2.1",
+        "phpstan/phpstan-strict-rules": "^2.0"
+    },
+    "config": {
+        "platform": {
+            "php": "8.2.0"
+        },
+        "sort-packages": true
+    }
+}
