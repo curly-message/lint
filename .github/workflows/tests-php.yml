@@ -1,0 +1,38 @@
+name: PHP tests
+
+# The Composer package, packed and tested on each platform it holds a command
+# for by `build-php.yml`, over the wheels `build.yml` builds there. Filtered
+# by path, since it builds each platform's command and installs the package
+# on each PHP of each; so it is never a required check. The publish workflow
+# calls it.
+on:
+  push:
+    branches: [main]
+    paths:
+      - php/**
+      - rust/**
+      - python/**
+      - fixtures/**
+      - .github/workflows/build.yml
+      - .github/workflows/build-php.yml
+      - .github/workflows/tests-php.yml
+  pull_request:
+    paths:
+      - php/**
+      - rust/**
+      - python/**
+      - fixtures/**
+      - .github/workflows/build.yml
+      - .github/workflows/build-php.yml
+      - .github/workflows/tests-php.yml
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  Build:
+    uses: ./.github/workflows/build-php.yml
+    with:
+      artifacts: tested
