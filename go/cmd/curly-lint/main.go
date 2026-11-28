@@ -74,10 +74,14 @@ func cache() (string, error) {
 // place keeps the command under root, in a directory named for its SHA-256,
 // and answers its path. The file is held to the command's bytes on every
 // run, so one cut short, altered or left with a mode that runs nothing is
-// written again. It is written beside its path and renamed onto it, so no
-// run reads half of it. Where that fails and the path holds the command all
-// the same, another run has placed it meanwhile, as on Windows, which
-// renames no file onto a program that is running.
+// written again. It is written beside its path and settled onto it, by a
+// link on Linux and macOS and a move on Windows, neither of which replaces
+// a name, so no run reads half of it and a command another run placed
+// meanwhile, which a third may be starting, stays. Only what is not the
+// command is renamed over, as is everything on Linux and macOS where the
+// file system holds no links. Where that fails and the path holds the command all the same,
+// another run has placed it meanwhile, as on Windows, which renames no file
+// onto a program that is running.
 func place(root string, command []byte) (string, error) {
 	sum := sha256.Sum256(command)
 	directory := filepath.Join(root, hex.EncodeToString(sum[:]))
@@ -124,12 +128,10 @@ func write(directory, path string, command []byte) error {
 	if closed := file.Close(); err == nil {
 		err = closed
 	}
-	if err == nil {
+	if err == nil && settle(file.Name(), path) != nil && !holds(path, command) {
 		err = os.Rename(file.Name(), path)
 	}
-	if err != nil {
-		os.Remove(file.Name())
-	}
+	os.Remove(file.Name())
 
 	return err
 }
