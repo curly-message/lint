@@ -128,25 +128,35 @@ fn reads_a_directory_in_the_order_of_its_names_and_a_path_from_the_root() {
             ("a_b/.hidden/x.json", b"{\"d\": \"{{\"}"),
         ],
     );
-    let files = |out: &str| -> Vec<String> {
-        out.lines()
+    let files = |cwd: &Path, argv: &[&str]| -> Vec<String> {
+        let (code, out, err) = run(cwd, argv);
+        let found: Vec<String> = out
+            .lines()
             .filter(|line| line.contains("  "))
             .map(|line| line.split(":1:").next().unwrap().to_owned())
-            .collect()
+            .collect();
+
+        assert_eq!(code, Some(1), "{out}{err}");
+        assert!(
+            err.starts_with(&format!("{} files have no locale", found.len()))
+                && err.lines().count() == 1,
+            "{err}"
+        );
+        found
     };
 
     assert_eq!(
-        files(&run(&root, &["."]).1),
+        files(&root, &["."]),
         ["B/x.json", "a/x.json", "a-b/x.json", "a_b/x.json"]
     );
     assert_eq!(
-        files(&run(&root.join("a"), &[".."]).1),
+        files(&root.join("a"), &[".."]),
         ["../B/x.json", "x.json", "../a-b/x.json", "../a_b/x.json"]
     );
     // A path is shown from the working directory, with `/`, however it is
     // given.
     assert_eq!(
-        files(&run(&root, &[root.join("a_b").to_str().unwrap(), "./B/../a"]).1),
+        files(&root, &[root.join("a_b").to_str().unwrap(), "./B/../a"]),
         ["a_b/x.json", "a/x.json"]
     );
 }

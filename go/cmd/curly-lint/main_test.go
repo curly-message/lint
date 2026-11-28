@@ -144,6 +144,37 @@ func TestPlaceLeavesAHeldCommandAlone(t *testing.T) {
 	}
 }
 
+// A run that found the command missing writes it while another places it:
+// what the other put there stays, since a third run may be starting it.
+func TestWriteLeavesAPlacedCommandAlone(t *testing.T) {
+	root := t.TempDir()
+
+	path, err := place(root, native)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := write(filepath.Dir(path), path, native); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) {
+		t.Fatalf("%s was replaced while it held the command", path)
+	}
+	if names := entries(t, filepath.Dir(path)); len(names) != 1 {
+		t.Fatalf("the command's directory holds %v", names)
+	}
+}
+
 func TestPlaceWritesAgainWhatDiffers(t *testing.T) {
 	for name, held := range map[string][]byte{
 		"cut short": native[:len(native)/2],
